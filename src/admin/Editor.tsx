@@ -366,6 +366,7 @@ function DragLayer(props: { ed: EditorState; canvas: () => HTMLElement | undefin
   const ARROW: Record<string, Dir> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
   const placeText = (kind: Movable, id: string) =>
     kind === 'block' ? ed.placeOf(id) : kind === 'row' ? rowPlace(id) : `position ${ed.doc.sections.findIndex((s) => s.id === id) + 1} of ${ed.doc.sections.length}`;
+  const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
   const nameOf = (kind: Movable, id: string): string => sourceName(kind === 'block' ? { type: 'block', id } : { type: kind, id });
   const refocus = (kind: Movable, id: string) => queueMicrotask(() => {
     const sel = kind === 'block' ? `[data-fb-block="${id}"]` : `[data-fb-handle="${kind}:${id}"]`;
@@ -377,7 +378,7 @@ function DragLayer(props: { ed: EditorState; canvas: () => HTMLElement | undefin
     const dir = ARROW[e.key];
     if (mine) {
       if (dir) {
-        withFlip(() => props.onAnnounce(ed.actions.nudge(kind, id, dir) ? `${placeText(kind, id)}.` : 'It cannot move further that way.'));
+        withFlip(() => props.onAnnounce(ed.actions.nudge(kind, id, dir) ? `${cap(placeText(kind, id))}.` : 'It cannot move further that way.'));
         refocus(kind, id);
       } else if (e.key === ' ' || e.key === 'Enter') {
         ed.grab.drop();

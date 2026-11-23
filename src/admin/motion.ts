@@ -39,6 +39,13 @@ export function flip(before: Map<string, DOMRect>, opts: { root?: ParentNode; sk
   }
 }
 
+/**
+ * Resolves when the animation ends, or a little after its duration at the latest: a background tab can stall
+ * animations, and a drag must never wait on one.
+ */
+const ended = (a: Animation, ms: number) =>
+  Promise.race([a.finished.catch(() => undefined), new Promise((r) => setTimeout(r, ms + 100))]);
+
 const shadow = (el: Element, token: string) => getComputedStyle(el).getPropertyValue(token).trim() || 'none';
 
 /** Drop settle: the placed block flies from the overlay's release rect into place, losing tilt and scale; then flashes. */
@@ -48,13 +55,14 @@ export function settle(el: HTMLElement, from: DOMRect | null) {
   const now = el.getBoundingClientRect();
   const dx = from.left - now.left;
   const dy = from.top - now.top;
-  el.animate(
+  const a = el.animate(
     [
       { transform: `translate(${dx}px, ${dy}px) rotate(-1.2deg) scale(1.02)`, boxShadow: shadow(el, '--shadow-drag') },
       { transform: 'none', boxShadow: shadow(el, '--shadow-card') },
     ],
     { duration: MOTION.drop, easing: MOTION.dropEase },
-  ).finished.then(flash, flash);
+  );
+  void ended(a, MOTION.drop).then(flash);
 }
 
 /** Cancel: the overlay copy flies back to the original (block) and loses its tilt. Resolves when it lands. */
@@ -64,15 +72,11 @@ export function flyBack(overlay: HTMLElement, to: DOMRect | null): Promise<unkno
   if (!to || !card) return fade(overlay);
   const from = overlay.getBoundingClientRect();
   card.animate([{ transform: 'rotate(-1.2deg) scale(1.02)' }, { transform: 'none' }], { duration: MOTION.drop, easing: MOTION.out, fill: 'forwards' });
-  return overlay
-    .animate([{ transform: 'none' }, { transform: `translate(${to.left - from.left}px, ${to.top - from.top}px)` }], { duration: MOTION.drop, easing: MOTION.out, fill: 'forwards' })
-    .finished.catch(() => undefined);
+  return ended(overlay.animate([{ transform: 'none' }, { transform: `translate(${to.left - from.left}px, ${to.top - from.top}px)` }], { duration: MOTION.drop, easing: MOTION.out, fill: 'forwards' }), MOTION.drop);
 }
 
 /** Cancel of a palette item, row or page: the overlay fades and shrinks to 0.96. */
 export function fade(overlay: HTMLElement): Promise<unknown> {
   if (reducedMotion()) return Promise.resolve();
-  return overlay
-    .animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(.96)' }], { duration: MOTION.hover, easing: MOTION.standard, fill: 'forwards' })
-    .finished.catch(() => undefined);
+  return ended(overlay.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(.96)' }], { duration: MOTION.hover, easing: MOTION.standard, fill: 'forwards' }), MOTION.hover);
 }
