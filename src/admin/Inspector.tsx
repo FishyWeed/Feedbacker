@@ -73,8 +73,7 @@ function SectionSettings(props: { section: Section; index: number }) {
       <div class="fb-insp-s">
         <div class="fb-insp-t">Section {props.index + 1}</div>
         <Field label="Title (optional)">{(id) => <input class="fb-input" id={id} value={props.section.title ?? ''} maxLength={500} onInput={(e) => up({ title: e.currentTarget.value })} />}</Field>
-        <Toggle label="Start a new page" checked={props.index === 0 || props.section.newPage} disabled={props.index === 0} onChange={(v) => up({ newPage: v })} />
-        <p class="fb-help">{props.index === 0 ? 'The first section always starts page 1.' : 'Off: this section shows on the same page as the section above.'}</p>
+        <p class="fb-help">This section is page {props.index + 1} of the form.</p>
       </div>
       <RuleEditor targetId={props.section.id} rule={props.section.showIf} onChange={(showIf) => up({ showIf })} subject="section" />
       <div class="fb-insp-s">

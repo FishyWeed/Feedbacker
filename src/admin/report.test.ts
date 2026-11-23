@@ -4,7 +4,7 @@ import { columnValues, DATE_COL, headerCycle, headerToView, nextHeader, summariz
 
 const doc: FormDoc = {
   title: 'T',
-  sections: [{ id: 's', newPage: true, rows: [{ id: 'r', columns: [{ id: 'c', blocks: [
+  sections: [{ id: 's', rows: [{ id: 'r', columns: [{ id: 'c', blocks: [
     { id: 'food', kind: 'single_choice', label: 'Food', options: ['Chicken', 'Beef'] },
     { id: 'tags', kind: 'multi_choice', label: 'Tags', options: ['A', 'B'] },
     { id: 'stars', kind: 'rating', label: 'Stars', max: 5 },

@@ -3,14 +3,14 @@ import { checkAnswers, pagesOf, questionsBefore, visibleIds, visiblePages } from
 import { parseFormDoc, type Block, type FormDoc } from './schema';
 
 const q = (id: string, kind: Block['kind'], extra: Partial<Block> = {}): Block => ({ id, kind, label: id, ...extra });
-const sec = (id: string, blocks: Block[], extra = {}) => ({ id, newPage: false, rows: [{ id: `r${id}`, columns: [{ id: `c${id}`, blocks }] }], ...extra });
+const sec = (id: string, blocks: Block[], extra = {}) => ({ id, rows: [{ id: `r${id}`, columns: [{ id: `c${id}`, blocks }] }], ...extra });
 
 const doc: FormDoc = {
   title: 'Test',
   sections: [
-    sec('s1', [q('likes', 'yes_no', { required: true }), q('why', 'long_text', { required: true, showIf: { match: 'all', conditions: [{ q: 'likes', op: 'equals', value: 'Yes' }] } })], { newPage: true }),
-    sec('s2', [q('score', 'rating', { max: 5 })], { newPage: true, showIf: { match: 'all', conditions: [{ q: 'likes', op: 'equals', value: 'No' }] } }),
-    sec('s3', [q('email', 'email')], { newPage: true }),
+    sec('s1', [q('likes', 'yes_no', { required: true }), q('why', 'long_text', { required: true, showIf: { match: 'all', conditions: [{ q: 'likes', op: 'equals', value: 'Yes' }] } })]),
+    sec('s2', [q('score', 'rating', { max: 5 })], { showIf: { match: 'all', conditions: [{ q: 'likes', op: 'equals', value: 'No' }] } }),
+    sec('s3', [q('email', 'email')]),
   ],
 };
 

@@ -45,15 +45,8 @@ export function visibleIds(doc: FormDoc, answers: Answers): Set<string> {
   return visible;
 }
 
-/** Splits sections into pages. A section with newPage starts a new page. */
-export function pagesOf(doc: FormDoc): Section[][] {
-  const pages: Section[][] = [];
-  for (const s of doc.sections) {
-    if (s.newPage || pages.length === 0) pages.push([]);
-    pages[pages.length - 1]!.push(s);
-  }
-  return pages;
-}
+/** Splits the form into pages: every section is its own page. */
+export const pagesOf = (doc: FormDoc): Section[][] => doc.sections.map((s) => [s]);
 
 /** Pages with hidden sections removed. A page with no visible section is skipped. */
 export const visiblePages = (doc: FormDoc, visible: Set<string>) =>

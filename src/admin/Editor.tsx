@@ -268,7 +268,7 @@ function DragLayer(props: { ed: EditorState; canvas: () => HTMLElement | undefin
     s.type === 'new' ? KIND_LABELS[s.kind]
       : s.type === 'block' ? blockLabel(locate(unwrap(ed.doc), s.id)?.block)
         : s.type === 'row' ? 'Row' : (ed.doc.sections.find((x) => x.id === s.id)?.title?.trim() || 'Section');
-  const pageOf = (sectionIndex: number) => ed.doc.sections.slice(0, sectionIndex + 1).filter((s, i) => i === 0 || s.newPage).length;
+  const pageOf = (sectionIndex: number) => sectionIndex + 1; // every section is a page
   const rowPlace = (rowId: string) => {
     for (const [si, s] of ed.doc.sections.entries()) {
       const ri = s.rows.findIndex((r) => r.id === rowId);
@@ -544,7 +544,6 @@ function PaletteItem(props: { kind: BlockKind }) {
 function Canvas(props: { ref: (el: HTMLDivElement) => void }) {
   const ed = useEditor();
   const { dnd } = useDrag();
-  const pageOf = (i: number) => ed.doc.sections.slice(0, i + 1).filter((s, j) => j === 0 || s.newPage).length;
   const kind = () => dnd.drag()?.source.type;
   return (
     <div ref={props.ref} class="fb-canvas" data-fb-canvas
@@ -561,7 +560,7 @@ function Canvas(props: { ref: (el: HTMLDivElement) => void }) {
           <For each={ed.doc.sections}>
             {(s, i) => (
               <>
-                <Show when={i() > 0 && s.newPage}><div class="fb-newpage">Page {pageOf(i())} starts here</div></Show>
+                <Show when={i() > 0}><div class="fb-newpage">Page {i() + 1}</div></Show>
                 <SectionCard section={s} index={i()} />
               </>
             )}
@@ -600,7 +599,7 @@ function SectionBar(props: { id: string; ghost?: boolean; dragging?: boolean }) 
   const ed = useEditor();
   const index = () => ed.doc.sections.findIndex((s) => s.id === props.id);
   const section = () => ed.doc.sections[index()];
-  const page = () => ed.doc.sections.slice(0, index() + 1).filter((s, j) => j === 0 || s.newPage).length;
+  const page = () => index() + 1;
   const count = () => section()?.rows.reduce((n, r) => n + r.columns.reduce((m, c) => m + c.blocks.length, 0), 0) ?? 0;
   return (
     <div class="fb-outline-sec" classList={{ 'is-ghost': props.ghost, 'is-dragging': props.dragging }}>

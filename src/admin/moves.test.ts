@@ -6,11 +6,11 @@ const b = (id: string): Block => ({ id, kind: 'short_text', label: id });
 /** Page "s1": row r1 [c1: A, B | c2: C], row r2 [c3: D]. Page "s2": row r3 [c4: E]. */
 const doc = (): FormDoc => ({
   title: 't', sections: [
-    { id: 's1', newPage: true, rows: [
+    { id: 's1', rows: [
       { id: 'r1', columns: [{ id: 'c1', blocks: [b('A'), b('B')] }, { id: 'c2', blocks: [b('C')] }] },
       { id: 'r2', columns: [{ id: 'c3', blocks: [b('D')] }] },
     ] },
-    { id: 's2', newPage: true, rows: [{ id: 'r3', columns: [{ id: 'c4', blocks: [b('E')] }] }] },
+    { id: 's2', rows: [{ id: 'r3', columns: [{ id: 'c4', blocks: [b('E')] }] }] },
   ],
 });
 const layout = (d: FormDoc) => d.sections.map((s) => s.rows.map((r) => r.columns.map((c) => c.blocks.map((x) => x.id).join('')).join('|')).join(' / ')).join(' // ');
@@ -62,7 +62,6 @@ test('rows and sections move; no-ops report false', () => {
   expect(layout(d)).toBe('D / E / AB|C // ');
   expect(moveSectionTo(d, 's2', 0)).toBe(true);
   expect(d.sections.map((s) => s.id)).toEqual(['s2', 's1']);
-  expect(d.sections[0]!.newPage).toBe(true);
   expect(moveSectionTo(d, 's2', 1)).toBe(false);
 });
 

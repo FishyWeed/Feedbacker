@@ -97,7 +97,7 @@ export function createEditor(formId: string, initial: FormDoc, initialState: Pub
     const sel = selected();
     const loc = sel ? locate(d, sel) : null;
     if (loc?.column) return loc.column;
-    if (!d.sections.length) d.sections.push(newSection(true));
+    if (!d.sections.length) d.sections.push(newSection());
     const section = loc?.section ?? d.sections[d.sections.length - 1]!;
     if (!section.rows.length) section.rows.push(newRow());
     return section.rows[section.rows.length - 1]!.columns[0]!;
@@ -154,7 +154,7 @@ export function createEditor(formId: string, initial: FormDoc, initialState: Pub
       return tryEdit((d) => (kind === 'row' ? nudgeRow(d, id, dir) : nudgeSection(d, id, dir)));
     },
     addSection() {
-      const s = newSection(false);
+      const s = newSection();
       edit((d) => { d.sections.push(s); });
       select(s.id);
     },

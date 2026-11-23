@@ -10,7 +10,7 @@ You build a form in a drag-and-drop editor, share a link or a QR code, and read 
   their own answer.
 - **Blocks:** short text, long text, email, number, single choice, multiple choice, dropdown, rating, scale, yes/no,
   date, heading, paragraph, image, divider and button.
-- **Pages:** Each section has a "Start a new page" switch. Sections can be one page each, or share a page.
+- **Pages:** Each section is its own page. Visitors move through the pages with Next and Back.
 - **Conditional logic:** A section or block can show only if earlier answers match rules
   (for example "Show if *Did you like it?* is *No*").
 - **Images:** upload a PNG, JPEG, GIF or WebP file (up to 5 MB) from your computer, or use an image URL.

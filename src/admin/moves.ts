@@ -125,8 +125,6 @@ export function moveSectionTo(d: FormDoc, sectionId: string, index: number): boo
   if (from < 0 || index === from || index === from + 1) return false;
   const [s] = d.sections.splice(from, 1);
   d.sections.splice(index > from ? index - 1 : index, 0, s!);
-  // The first section always starts page 1.
-  d.sections[0]!.newPage = true;
   return true;
 }
 
@@ -182,12 +180,11 @@ export function nudgeSection(d: FormDoc, sectionId: string, dir: 'up' | 'down'):
   return i >= 0 && moveSectionTo(d, sectionId, dir === 'up' ? i - 1 : i + 2);
 }
 
-/** "page 1, row 2, column 1" for announcements and toasts. Pages follow sections that start a new page. */
+/** "page 1, row 2, column 1" for announcements and toasts. Every section is a page. */
 export function placeOf(d: FormDoc, blockId: string): string {
   const w = whereIs(d, blockId);
   if (!w) return '';
-  const page = d.sections.slice(0, w.sectionIndex + 1).filter((s, i) => i === 0 || s.newPage).length;
-  return `page ${page}, row ${w.rowIndex + 1}, column ${w.columnIndex + 1}`;
+  return `page ${w.sectionIndex + 1}, row ${w.rowIndex + 1}, column ${w.columnIndex + 1}`;
 }
 
 /**

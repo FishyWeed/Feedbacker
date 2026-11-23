@@ -47,7 +47,8 @@ export type Block = {
 };
 export type Column = { id: string; blocks: Block[] };
 export type Row = { id: string; columns: Column[] };
-export type Section = { id: string; title?: string; newPage: boolean; showIf?: Rule; rows: Row[] };
+/** A section is one page of the form. */
+export type Section = { id: string; title?: string; showIf?: Rule; rows: Row[] };
 export type FormDoc = {
   title: string; description?: string; thankYou?: string; sections: Section[];
   theme?: FormTheme; background?: FormBackground; qr?: QrDesign; typography?: FormTypography;
@@ -78,9 +79,9 @@ export function newBlock(kind: BlockKind): Block {
 }
 export const newColumn = (): Column => ({ id: uid(), blocks: [] });
 export const newRow = (columns = 1): Row => ({ id: uid(), columns: Array.from({ length: columns }, newColumn) });
-export const newSection = (newPage = false): Section => ({ id: uid(), title: '', newPage, rows: [newRow()] });
+export const newSection = (): Section => ({ id: uid(), title: '', rows: [newRow()] });
 export const newForm = (title: string): FormDoc => ({
-  title, description: '', thankYou: 'Thanks — your answers are in.', sections: [newSection(true)],
+  title, description: '', thankYou: 'Thanks — your answers are in.', sections: [newSection()],
 });
 
 /** All blocks in document order: sections top-down, rows top-down, columns left-right, blocks top-down. */
@@ -138,7 +139,7 @@ export function parseFormDoc(x: unknown): FormDoc | null {
       }
       rows.push({ id: r.id, columns });
     }
-    sections.push({ id: s.id, title: str(s.title, 500), newPage: s.newPage === true, showIf: parseRule(s.showIf), rows });
+    sections.push({ id: s.id, title: str(s.title, 500), showIf: parseRule(s.showIf), rows });
   }
   // Ids are answer keys and drag-and-drop keys, so they must be unique.
   const ids = sections.flatMap((s) => [s.id, ...s.rows.flatMap((r) => [r.id, ...r.columns.flatMap((c) => [c.id, ...c.blocks.map((b) => b.id)])])]);
