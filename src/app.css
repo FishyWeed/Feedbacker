@@ -1,0 +1,306 @@
+/* App glue on top of the Feedbacker design system (tokens.css + bundle.css).
+   Only layout the design system leaves to the app, and the custom-theme variables. Tokens only, no new colors. */
+html, body, #app { height: 100%; }
+
+/* Public page: fills the window; the background stays put while the form scrolls. */
+.fb-pub.is-page { min-height: 100vh; min-height: 100dvh; }
+.fb-pub.is-page > .fbg { position: fixed; }
+.fb-pub-col { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+
+/* Custom theme: Default's neutrals with the owner's accent (Themes.md, "Custom theme"). */
+.fb-custom {
+  --accent: var(--cl-accent); --on-accent: var(--cl-on-accent);
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  --star: var(--accent); --focus: var(--accent); --success: var(--accent);
+}
+.fb-theme-default.fb-custom[data-mode="dark"],
+[data-theme="dark"] .fb-theme-default.fb-custom:not([data-mode="light"]) { --accent: var(--cd-accent); --on-accent: var(--cd-on-accent); }
+@media (prefers-color-scheme: dark) {
+  .fb-theme-default.fb-custom[data-mode="auto"] { --accent: var(--cd-accent); --on-accent: var(--cd-on-accent); }
+}
+
+/* Dialogs sit over the whole window; long dialogs scroll inside. */
+.fb-scrim.is-fixed { position: fixed; inset: 0; z-index: 100; overflow-y: auto; }
+.fb-modal--wide { width: min(960px, 100%); }
+.fb-modal-b { max-height: calc(100dvh - 180px); overflow-y: auto; }
+
+/* Owner app shell: full window, the editor panels scroll on their own. */
+.fb-app.is-full { height: 100vh; height: 100dvh; overflow: hidden; }
+/* Scoped to the owner app (.fb-app), so the editor mock-ups on the landing page keep their desktop layout. */
+.fb-app .fb-ed { grid-template-rows: minmax(0, 1fr); }
+@media (max-width: 1000px) {
+  .fb-app .fb-ed { grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .fb-app .fb-ed > .fb-insp { grid-column: 1 / -1; max-height: 45vh; border-left: 0; border-top: 1px solid var(--border); }
+}
+@media (max-width: 640px) {
+  .fb-app.is-full { height: auto; overflow: visible; }
+  .fb-app .fb-ed { grid-template-columns: 1fr; grid-template-rows: none; }
+  .fb-app .fb-pal { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--border); }
+  .fb-app .fb-ed > .fb-insp { max-height: none; }
+  .fb-top { flex-wrap: wrap; height: auto; min-height: 56px; padding: 8px 12px; }
+}
+
+/* Editor preview stage: the themed page scrolls inside; its background stays in place. */
+.fb-stage { flex: 1; min-height: 0; overflow-y: auto; position: relative; }
+.fb-stage > .fb-pub { min-height: 100%; }
+.fb-stage-bar { display: flex; justify-content: center; gap: 12px; align-items: center; padding: 10px; border-bottom: 1px solid var(--border); background: var(--surface); }
+
+/* Drag and drop (src/admin/dnd.ts): a vertical swipe on a block or palette item still scrolls; handles never do. */
+.fb-block, .fb-pal-item { touch-action: pan-y; }
+.fb-handle { touch-action: none; cursor: grab; }
+body.fb-grabbing, body.fb-grabbing * { cursor: grabbing !important; user-select: none; }
+body.fb-nodrop-cursor, body.fb-nodrop-cursor * { cursor: not-allowed !important; }
+.fb-row.is-ghost { border: 2px dashed var(--border-strong); background: transparent; box-shadow: none; }
+.fb-row.is-ghost > * { visibility: hidden; }
+.fb-canvas.is-scroll-up { box-shadow: inset 0 56px 48px -48px var(--accent-soft); }
+.fb-canvas.is-scroll-down { box-shadow: inset 0 -56px 48px -48px var(--accent-soft); }
+
+/* QR codes are drawn as SVG with a large intrinsic size; scale them to their tile, box or stage. */
+.fb-mini > svg, .fb-qr-box svg, .fb-qrd-stage svg { display: block; width: 100%; height: 100%; }
+
+/* Preview with the theme panel beside it. */
+.fb-preview-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+.fb-preview-split.has-panel { grid-template-columns: minmax(0, 1fr) 380px; }
+@media (max-width: 800px) {
+  .fb-preview-split.has-panel { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 45vh; }
+  .fb-preview-split > .fb-insp { border-left: 0; border-top: 1px solid var(--border); }
+}
+
+/* Theme panel: color mode and the Theme / Background switch stay at the top while the tiles scroll. */
+.fb-design-bar { position: sticky; top: 0; z-index: 2; background: var(--surface); }
+.fb-design-bar > .fb-seg { display: flex; }
+.fb-design-bar > .fb-seg > button { flex: 1; justify-content: center; }
+
+/* --- Public form: typography (shared/typography.ts sets the variables) and spacing --- */
+/* Dev-mode settings live on the owner chrome; the public form always starts from its own theme. */
+.fb-pub { --label-font: var(--font); --bw: 1px; --accent-ink: var(--accent); --label-case: none; }
+.fb-pub .fb-pub-title { font-size: calc(30px * var(--fs, 1)); line-height: 1.2; font-weight: var(--hw, 700); text-transform: var(--hcase, none); }
+.fb-pub .fb-pub-sec { font-size: calc(20px * var(--fs, 1)); line-height: 1.35; font-weight: var(--hw, 650); text-transform: var(--hcase, none); }
+.fb-pub .fb-pub-h { font-size: calc(22px * var(--fs, 1)); line-height: 1.3; font-weight: var(--hw, 700); text-transform: var(--hcase, none); }
+.fb-pub .fb-q-l { font-size: calc(17px * var(--fs, 1)); line-height: var(--lh, 1.45); }
+.fb-pub .fb-pub-p, .fb-pub .fb-pub-desc { font-size: calc(16px * var(--fs, 1)); line-height: var(--lh, 1.5); }
+.fb-pub .fb-q-h { font-size: calc(14px * var(--fs, 1)); line-height: var(--lh, 1.45); margin: 0; }
+.fb-pub .fb-choice, .fb-pub .fb-input, .fb-pub .fb-textarea, .fb-pub .fb-select select { font-size: calc(16px * var(--fs, 1)); }
+.fb-pub .fb-textarea { line-height: var(--lh, 1.5); }
+.fb-pub[data-align="center"] .fb-pub-head { text-align: center; align-items: center; }
+@media (max-width: 560px) { .fb-pub .fb-pub-title { font-size: calc(24px * var(--fs, 1)); } }
+
+/* Spacing inside the form card: clear steps between header, sections, rows and questions. */
+.fb-pub .fb-req { margin-left: 0.2em; }
+.fb-pub .fb-q { gap: 10px; }
+.fb-pub .fb-q-l + .fb-q-h { margin-top: -4px; }
+.fb-pub .fb-choices { gap: 10px; }
+.fb-pub .fb-pub-head { gap: 10px; padding-bottom: 4px; }
+.fb-pub .fb-prog { margin-top: -8px; }
+.fb-pub .fb-pub-sec { margin-top: 8px; }
+.fb-pub .fb-fcard-pub > .fb-cols { row-gap: 28px; }
+.fb-pub .fb-nav { margin-top: 8px; padding-top: 24px; border-top: 1px solid var(--border); }
+.fb-pub .fb-err { margin-top: -2px; }
+
+/* Forms list: one rhythm for the header and the cards.
+   Header: title block left; Show, Sort and Create share one height and sit on the subtitle's baseline.
+   Cards: title, meta, status, then one row of actions; every card has the same blocks, so rows line up. */
+.fb-list-head { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+.fb-list-head > div:first-child { margin-right: 8px; }
+.fb-list-head .fb-sp { flex: 1; }
+.fb-list-head .fb-btn { height: var(--control-h); font-size: 14px; }
+/* 320px keeps Edit, Responses, Share and Delete on one row in every card. */
+.fb-forms { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.fb-fcard { gap: 0; padding: 20px; }
+.fb-fcard h3 { margin: 0; }
+.fb-fcard .fb-meta { margin: 4px 0 0; }
+.fb-fcard-status { display: flex; gap: 6px; margin-top: 12px; }
+.fb-fcard .fb-acts { flex-wrap: nowrap; align-items: center; gap: 6px; margin-top: 16px; padding-top: 16px; border-top: var(--bw, 1px) solid var(--border); }
+.fb-fcard .fb-acts > .fb-btn { flex: none; }
+/* The spacer would add two gaps; push the icon pair right with an auto margin instead. */
+.fb-fcard .fb-acts > .fb-sp { display: none; }
+.fb-fcard .fb-acts > .fb-sp + .fb-btn--icon { margin-left: auto; }
+.fb-fcard .fb-acts > .fb-btn--icon + .fb-btn--icon { margin-left: -2px; }
+
+/* Responses table: column titles are buttons that open the sort and filter menu. */
+.fb-table thead th:has(.fb-th-btn) { padding: 0; }
+.fb-th-btn { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 10px 14px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.fb-th-btn > span:first-child { flex: 1; display: flex; flex-direction: column; }
+.fb-th-btn:hover { background: var(--surface2); }
+.fb-th-ic { display: inline-flex; gap: 2px; color: var(--muted); opacity: .55; padding-top: 2px; }
+.fb-th-btn:hover .fb-th-ic, .fb-th-ic.on { opacity: 1; color: var(--accent-ink, var(--accent)); }
+.fb-flip { transform: rotate(180deg); }
+.fb-col-menu { max-height: min(420px, 70vh); overflow-y: auto; }
+.fb-menu-t { padding: 6px 10px 2px; text-transform: uppercase; letter-spacing: .06em; }
+.fb-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 12px; }
+.fb-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: var(--bw, 1px) solid var(--border-strong); border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--text); font-size: 13px; cursor: pointer; }
+.fb-chip:hover { border-color: var(--accent-ink, var(--accent)); }
+
+/* --- Landing page: basic blocks until the design system has a landing page --- */
+.fb-design-bar > .fb-seg > button { min-width: max-content; /* never narrower than its label, so the bold selected label does not spill */ padding-inline: 8px; white-space: nowrap; }
+
+/* --- Polish: back link, settings nav, sliders, text selection, scrolling, transitions --- */
+
+/* Back link above a page title: quiet until hovered, the arrow nudges left. */
+.fb-back { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 6px; margin: 0 0 8px -6px;
+  border-radius: var(--radius-ctl); color: var(--muted); font-size: 14px; font-weight: 600; text-decoration: none;
+  transition: background-color var(--t-hover) var(--ease), color var(--t-hover) var(--ease); }
+.fb-back:hover { background: var(--surface2); color: var(--text); }
+.fb-back svg { transition: transform var(--t-hover) var(--ease); }
+.fb-back:hover svg { transform: translateX(-3px); }
+
+/* Settings side nav uses buttons (no #hash in the URL); same look as the design's links. */
+.fb-settings nav button { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border: 0; background: transparent;
+  border-radius: var(--radius-ctl); color: var(--text); font: inherit; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer;
+  transition: background-color var(--t-hover) var(--ease); }
+.fb-settings nav button:hover { background: var(--surface2); }
+.fb-settings nav button[aria-current="page"] { background: var(--accent-soft); font-weight: 650; box-shadow: inset 3px 0 0 var(--accent-ink, var(--accent)); }
+.fb-settings [id] { scroll-margin-top: 24px; }
+[tabindex="-1"]:focus { outline: none; }
+
+/* Sliders: filled accent track, solid thumb with a surface ring, a halo while dragging, value in a pill. */
+.fb-range input::-webkit-slider-runnable-track { height: 8px; }
+.fb-range input::-moz-range-track { height: 8px; border-radius: 999px; background: var(--surface2); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.fb-range input::-moz-range-progress { height: 8px; border-radius: 999px; background: var(--accent); }
+.fb-range input::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -7px; background: var(--accent); border: 3px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--accent-ink, var(--accent)), 0 2px 6px color-mix(in srgb, var(--text) 25%, transparent);
+  transition: transform var(--t-hover) var(--ease), box-shadow var(--t-base) var(--ease); }
+.fb-range input::-moz-range-thumb { width: 16px; height: 16px; background: var(--accent); border: 3px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--accent-ink, var(--accent)), 0 2px 6px color-mix(in srgb, var(--text) 25%, transparent);
+  transition: transform var(--t-hover) var(--ease), box-shadow var(--t-base) var(--ease); }
+.fb-range input:active::-webkit-slider-thumb { transform: scale(1.15); box-shadow: 0 0 0 1px var(--accent-ink, var(--accent)), 0 0 0 7px var(--accent-soft); cursor: grabbing; }
+.fb-range input:active::-moz-range-thumb { transform: scale(1.15); box-shadow: 0 0 0 1px var(--accent-ink, var(--accent)), 0 0 0 7px var(--accent-soft); }
+.fb-range input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 1px var(--accent-ink, var(--accent)), 0 0 0 5px var(--accent-soft); }
+.fb-range output { min-width: 56px; padding: 3px 8px; border-radius: var(--radius-pill); background: var(--surface2);
+  border: var(--bw, 1px) solid var(--border); text-align: center; font-size: 13px; }
+
+/* Text selection and the typing caret take the accent (also inside each form theme). */
+::selection { background: color-mix(in srgb, var(--accent) 32%, transparent); color: var(--text); }
+input, textarea, [contenteditable] { caret-color: var(--accent-ink, var(--accent)); }
+
+/* Smooth scrolling for the page and every scrolling panel. */
+@media (prefers-reduced-motion: no-preference) {
+  html, .fb-canvas, .fb-insp, .fb-pal, .fb-stage, .fb-table-wrap, .fb-modal-b { scroll-behavior: smooth; }
+}
+
+/* Smooth transitions: content fades up as it appears; route changes cross-fade (router.tsx). */
+@keyframes fb-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes fb-pop { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+.fb-wrap, .fb-settings main, .fb-ed, .fb-stage > .fb-pub, .fb-preview-split > .fb-insp, .fb-qcard, .fb-fcard, .fb-insp-s,
+.fb-menu, .fb-modal, .fb-chip, .fb-banner { animation: fb-pop var(--t-base) var(--ease-out) both; }
+.fb-tile, .fb-card, .fb-chip, .fb-input, .fb-textarea, .fb-select select, .fb-choice, .fb-pill, .fb-star, .fb-th-btn, .fb-zone, .fb-seg button {
+  transition: background-color var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease), color var(--t-hover) var(--ease),
+    box-shadow var(--t-base) var(--ease); }
+/* Blocks and palette items are moved by drag and drop, so they get no transform transition (it would lag behind the pointer). */
+.fb-block, .fb-pal-item { transition: background-color var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease), box-shadow var(--t-base) var(--ease); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--t-page); animation-timing-function: var(--ease); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+.fb-th-btn.is-on { background: var(--accent-soft); }
+.fb-th-btn.is-on small { color: var(--accent-ink, var(--accent)); font-weight: 600; }
+
+/* Font picker: the trigger and every option use their own font. */
+.fb-font-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; height: var(--control-h); padding: 0 12px;
+  background: var(--surface); color: var(--text); border: var(--bw, 1px) solid var(--border-strong); border-radius: var(--radius-ctl);
+  font-size: 15px; text-align: left; cursor: pointer; transition: border-color var(--t-hover) var(--ease); }
+.fb-font-trigger:hover { border-color: var(--text); }
+.fb-font-trigger > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fb-font-trigger > svg { color: var(--muted); transition: transform var(--t-base) var(--ease); }
+.fb-font-trigger[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.fb-font-list { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30; max-height: 340px; overflow-y: auto; }
+.fb-font-list > div { display: flex; flex-direction: column; }
+.fb-font-opt { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; padding: 0 10px;
+  border-radius: calc(var(--radius-ctl) - 2px); font-size: 16px; color: var(--text); cursor: pointer; }
+.fb-font-opt.is-focus { background: var(--surface2); }
+.fb-font-opt[aria-selected="true"] { background: var(--accent-soft); font-weight: 700; }
+.fb-font-opt > svg { color: var(--accent-ink, var(--accent)); flex: none; }
+
+/* Settings: the top bar and the side nav stay exactly where they are; only the content scrolls under them. */
+.is-settings > .fb-top { position: sticky; top: 0; z-index: 10; }
+.is-settings .fb-settings nav { top: calc(var(--topbar-h) + 32px); }
+.is-settings .fb-settings [id] { scroll-margin-top: calc(var(--topbar-h) + 24px); }
+
+/* Editor "Status": not clickable; hover or keyboard focus shows the save and live state. */
+.fb-hover-status { position: relative; cursor: default; }
+.fb-hover-status.is-ok, .fb-stline.is-ok { color: var(--success); }
+.fb-hover-status.is-warn, .fb-stline.is-warn { color: var(--warning); }
+.fb-hover-status.is-bad, .fb-stline.is-bad { color: var(--danger); }
+.fb-stline { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; font-weight: 500; white-space: nowrap; }
+.fb-stline b { font-weight: 650; }
+.fb-stline.is-busy { color: var(--muted); }
+.fb-stdot { width: 8px; height: 8px; margin: 0 4px; border-radius: 50%; background: currentColor; flex: none; }
+.fb-status-pop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+  min-width: 0; width: max-content; padding: 10px 12px; gap: 8px; align-items: flex-start;
+  visibility: hidden; opacity: 0; transform: translateY(-4px);
+  transition: opacity .15s ease, transform .15s ease, visibility .15s;
+}
+.fb-hover-status:hover .fb-status-pop, .fb-hover-status:focus-visible .fb-status-pop { visibility: visible; opacity: 1; transform: none; }
+
+/* Arcade draws the mark with square corners (design system: Logo). */
+[data-dev-theme="arcade"] .fb-logo rect { rx: 0; }
+.fb-loading .fb-logo { flex: none; }
+.fb-done > .fb-logo { margin: 0 auto 8px; }
+
+/* Landing: the phone and tablet menu (design system: links move into a sheet). */
+.lp .lp-nav { position: relative; }
+.lp-menu-box { display: contents; }
+.lp-sheet { position: absolute; top: calc(100% - 4px); right: 16px; z-index: 30; }
+
+/* Landing copy button: a tick and a "Copied" bubble after a click (src/landing/shared.tsx: copyCmd). */
+.lp-cmd .fb-btn { position: relative; }
+.lp-cmd .fb-btn[data-copy="ok"] { color: var(--success); }
+.lp-cta .lp-cmd .fb-btn[data-copy="ok"] { color: inherit; }
+.lp-cmd .fb-btn[data-copy]::after {
+  content: attr(data-msg);
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  padding: 4px 10px; border-radius: var(--radius-ctl); white-space: nowrap;
+  background: var(--text); color: var(--bg); font: 600 12px/18px var(--font);
+  box-shadow: var(--shadow-card); pointer-events: none;
+  animation: lp-copied var(--t-base, 180ms) var(--ease-out, ease-out) both;
+}
+.lp-cmd .fb-btn[data-copy="err"]::after { background: var(--danger); color: var(--on-danger); }
+@keyframes lp-copied { from { opacity: 0; transform: translate(-50%, 4px); } }
+
+/* Landing nav: "Star on GitHub" box (src/landing/shared.tsx: StarBox). Same height and edge as a small button. */
+.lp-star {
+  display: inline-flex; align-items: stretch; height: 32px; flex: none;
+  border: var(--bw, 1px) solid var(--border-strong); border-radius: var(--radius-ctl); overflow: hidden;
+  background: var(--surface); color: var(--text); text-decoration: none; font-size: 13px; font-weight: 600;
+  transition: background-color var(--t-hover, 120ms) var(--ease, ease), border-color var(--t-hover, 120ms) var(--ease, ease);
+}
+.lp-star-l { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; }
+.lp-star-n { display: inline-flex; align-items: center; padding: 0 10px; border-left: var(--bw, 1px) solid var(--border-strong); background: var(--surface2); }
+.lp-star .fb-i { transition: transform var(--t-base, 180ms) var(--ease-drop, ease-out), fill var(--t-hover, 120ms); }
+.lp-star:hover .lp-star-l { background: var(--surface2); }
+.lp-star:hover .fb-i { fill: var(--star, var(--accent)); stroke: var(--star, var(--accent)); transform: rotate(-12deg) scale(1.15); }
+/* Arcade: the same frame, hard shadow and mono caps as its buttons. */
+[data-dev-theme="arcade"] .lp-star { border: 2px solid var(--border); box-shadow: 3px 3px 0 var(--shadow-ink); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .03em; }
+[data-dev-theme="arcade"] .lp-star-n { border-left: 2px solid var(--border); }
+[data-dev-theme="arcade"] .lp-star:active { transform: translate(3px, 3px); box-shadow: none; }
+@media (max-width: 760px) { .lp .lp-nav > .lp-star { display: none; } }
+
+/* Landing "01 Build" shot on phones: smaller and cropped, as in the LandingPaperPhone card (frame 360px, zoom 0.5).
+   !important beats the desktop sizes written inline in the generated markup. */
+@media (max-width: 760px) {
+  .lp #build .lp-frame { height: 360px !important; }
+  .lp #build .lp-frame > div { zoom: 0.5 !important; }
+  .lp #build .lp-frame .fb-ed { height: 720px !important; }
+}
+
+/* Arcade landing: the lime feature card. In dark mode its frame and type were white on lime; make them black
+   (on-accent) in both modes. The icon tile turns black with a lime icon. */
+.lp--arcade .lp-feat:nth-child(5) { --border: var(--on-accent); --text: var(--on-accent); color: var(--on-accent); }
+.lp--arcade .lp-feat:nth-child(5) .lp-ic { background: var(--on-accent); color: var(--accent); }
+/* Arcade landing, dark mode: the closing command box was near-white, so the lime "$" was hard to see.
+   Use the dark surface with light type, as in the hero command box. */
+[data-theme="dark"] .lp--arcade .lp-cta .lp-cmd { background: var(--surface2); color: var(--text); border-color: var(--border); }
+
+/* Scrollbars follow the theme: a thin thumb in the nearest wrapper's --border-strong (3:1 control edge) on a clear track.
+   The page and the preview stage sit outside the dev-theme wrappers, so they read --root-sb-thumb (src/ui/scrollbar.ts). */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) transparent; }
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); background-clip: padding-box; border: 2px solid transparent; border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--muted); }
+  html::-webkit-scrollbar-thumb, .fb-stage::-webkit-scrollbar-thumb { background-color: var(--root-sb-thumb, var(--border-strong)); }
+  [data-dev-theme="arcade"] ::-webkit-scrollbar-thumb { border-radius: 0; }
+}

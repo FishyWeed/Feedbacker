@@ -1,0 +1,15 @@
+# Local dev only: ctx context memory and Claude settings
+.claude/
+
+# Secrets
+.env
+
+# Database
+*.db
+*.db-*
+data/
+
+node_modules/
+
+# Build output
+dist/

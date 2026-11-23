@@ -1,0 +1,170 @@
+/* Feedbacker — generated from tokens.json */
+:root, [data-theme="light"] {
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --surface2: #eef1f6;
+  --border: #d9dee7;
+  --border-strong: #858ea0;
+  --text: #151922;
+  --muted: #586174;
+  --accent: #2952cc;
+  --accent-soft: #e9eefb;
+  --on-accent: #ffffff;
+  --danger: #c42b3c;
+  --danger-soft: #fbe9eb;
+  --on-danger: #ffffff;
+  --success: #17784c;
+  --success-soft: #e3f3ea;
+  --warning: #8a5a00;
+  --warning-soft: #fbf0d9;
+  --star: #b06f00;
+  --focus: #2952cc;
+  --overlay: #0f121980;
+  --shadow-card: 0 1px 2px rgba(16,20,30,0.06), 0 4px 14px rgba(16,20,30,0.05);
+  --shadow-modal: 0 16px 40px rgba(16,20,30,0.18), 0 2px 6px rgba(16,20,30,0.08);
+  --shadow-drag: 0 20px 40px rgba(16,20,30,0.22), 0 4px 10px rgba(16,20,30,0.12);
+}
+[data-theme="dark"] {
+  --bg: #0e1116;
+  --surface: #161a22;
+  --surface2: #1e232d;
+  --border: #2b3140;
+  --border-strong: #6c7487;
+  --text: #eceff4;
+  --muted: #a0a8b8;
+  --accent: #8ea6ff;
+  --accent-soft: #232b47;
+  --on-accent: #0d1020;
+  --danger: #ff8b96;
+  --danger-soft: #3a1d24;
+  --on-danger: #1a0a0d;
+  --success: #5fd39a;
+  --success-soft: #163024;
+  --warning: #f2bd55;
+  --warning-soft: #33280f;
+  --star: #f5c04a;
+  --focus: #8ea6ff;
+  --overlay: #000000a3;
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.45), 0 4px 14px rgba(0,0,0,0.25);
+  --shadow-modal: 0 18px 44px rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.4);
+  --shadow-drag: 0 22px 44px rgba(0,0,0,0.7), 0 4px 10px rgba(0,0,0,0.5);
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --radius-sharp: 4px;
+  --radius-soft: 10px;
+  --radius-ctl-soft: 8px;
+  --radius-round: 18px;
+  --radius-ctl-round: 14px;
+  --radius-pill: 999px;
+  --duration-hover: 120ms;
+  --duration-lift: 140ms;
+  --duration-base: 180ms;
+  --duration-drop: 220ms;
+  --duration-page: 260ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --easing-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --easing-drop: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --control-h: 40px;
+  --control-h-sm: 32px;
+  --control-h-touch: 48px;
+  --target-min: 44px;
+  --topbar-h: 56px;
+  --form-max: 640px;
+  --ring-width: 2px;
+  --font-system: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif;
+  --font-serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Noto Serif", serif;
+  --font-rounded: ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", Quicksand, Comfortaa, Manjari, "Arial Rounded MT", "Arial Rounded MT Bold", Calibri, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Source Code Pro", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --font-space-grotesk: "Space Grotesk", system-ui, sans-serif;
+  --font-figtree: Figtree, system-ui, sans-serif;
+  --font-ibm-plex-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-geist: Geist, system-ui, sans-serif;
+  --font-fraunces: Fraunces, ui-serif, Georgia, serif;
+  --font-instrument-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-silkscreen: Silkscreen, ui-monospace, monospace;
+  --font-jetbrains-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/space-grotesk-400.woff2") format("woff2")}
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/space-grotesk-700.woff2") format("woff2")}
+@font-face{font-family:"Manrope";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/manrope-400.woff2") format("woff2")}
+@font-face{font-family:"Manrope";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/manrope-700.woff2") format("woff2")}
+@font-face{font-family:"DM Sans";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/dm-sans-400.woff2") format("woff2")}
+@font-face{font-family:"DM Sans";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/dm-sans-700.woff2") format("woff2")}
+@font-face{font-family:"Figtree";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/figtree-400.woff2") format("woff2")}
+@font-face{font-family:"Figtree";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/figtree-700.woff2") format("woff2")}
+@font-face{font-family:"Onest";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/onest-400.woff2") format("woff2")}
+@font-face{font-family:"Onest";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/onest-700.woff2") format("woff2")}
+@font-face{font-family:"Instrument Sans";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/instrument-sans-400.woff2") format("woff2")}
+@font-face{font-family:"Instrument Sans";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/instrument-sans-700.woff2") format("woff2")}
+@font-face{font-family:"Schibsted Grotesk";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/schibsted-grotesk-400.woff2") format("woff2")}
+@font-face{font-family:"Schibsted Grotesk";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/schibsted-grotesk-700.woff2") format("woff2")}
+@font-face{font-family:"Bricolage Grotesque";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/bricolage-grotesque-400.woff2") format("woff2")}
+@font-face{font-family:"Bricolage Grotesque";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/bricolage-grotesque-700.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/ibm-plex-sans-400.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/ibm-plex-sans-700.woff2") format("woff2")}
+@font-face{font-family:"Geist";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/geist-400.woff2") format("woff2")}
+@font-face{font-family:"Geist";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/geist-700.woff2") format("woff2")}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/fraunces-400.woff2") format("woff2")}
+@font-face{font-family:"Fraunces";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/fraunces-700.woff2") format("woff2")}
+@font-face{font-family:"Instrument Serif";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/instrument-serif-400.woff2") format("woff2")}
+@font-face{font-family:"DM Serif Display";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/dm-serif-display-400.woff2") format("woff2")}
+@font-face{font-family:"Newsreader";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/newsreader-400.woff2") format("woff2")}
+@font-face{font-family:"Newsreader";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/newsreader-700.woff2") format("woff2")}
+@font-face{font-family:"Literata";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/literata-400.woff2") format("woff2")}
+@font-face{font-family:"Literata";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/literata-700.woff2") format("woff2")}
+@font-face{font-family:"Nunito";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/nunito-400.woff2") format("woff2")}
+@font-face{font-family:"Nunito";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/nunito-700.woff2") format("woff2")}
+@font-face{font-family:"Quicksand";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/quicksand-400.woff2") format("woff2")}
+@font-face{font-family:"Quicksand";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/quicksand-700.woff2") format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/jetbrains-mono-400.woff2") format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/jetbrains-mono-700.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/ibm-plex-mono-400.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/ibm-plex-mono-700.woff2") format("woff2")}
+@font-face{font-family:"Space Mono";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/space-mono-400.woff2") format("woff2")}
+@font-face{font-family:"Space Mono";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/space-mono-700.woff2") format("woff2")}
+@font-face{font-family:"Geist Mono";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/geist-mono-400.woff2") format("woff2")}
+@font-face{font-family:"Geist Mono";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/geist-mono-700.woff2") format("woff2")}
+@font-face{font-family:"Silkscreen";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/silkscreen-400.woff2") format("woff2")}
+@font-face{font-family:"Silkscreen";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/silkscreen-700.woff2") format("woff2")}
+@font-face{font-family:"Pixelify Sans";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/pixelify-sans-400.woff2") format("woff2")}
+@font-face{font-family:"Pixelify Sans";font-style:normal;font-weight:700;font-display:swap;src:url("fonts/pixelify-sans-700.woff2") format("woff2")}
+@font-face{font-family:"Jersey 10";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/jersey-10-400.woff2") format("woff2")}
+@font-face{font-family:"Tiny5";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/tiny5-400.woff2") format("woff2")}
+@font-face{font-family:"VT323";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/vt323-400.woff2") format("woff2")}
+@font-face{font-family:"Press Start 2P";font-style:normal;font-weight:400;font-display:swap;src:url("fonts/press-start-2p-400.woff2") format("woff2")}
+.page-title { font-family: var(--font-system); font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.01em; }
+.section-title { font-family: var(--font-system); font-size: 20px; line-height: 28px; font-weight: 650; }
+.question-label { font-family: var(--font-system); font-size: 16px; line-height: 24px; font-weight: 600; }
+.body { font-family: var(--font-system); font-size: 15px; line-height: 22px; font-weight: 400; }
+.help-text { font-family: var(--font-system); font-size: 14px; line-height: 20px; font-weight: 400; }
+.caption { font-family: var(--font-system); font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.02em; }
+.number-xl { font-family: var(--font-system); font-size: 48px; line-height: 48px; font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.number { font-family: var(--font-system); font-size: 32px; line-height: 40px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.number-sm { font-family: var(--font-system); font-size: 14px; line-height: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.form-title { font-family: var(--font-system); font-size: 30px; line-height: 36px; font-weight: 700; letter-spacing: -0.015em; }
+.form-section { font-family: var(--font-system); font-size: 20px; line-height: 28px; font-weight: 650; }
+.form-question { font-family: var(--font-system); font-size: 17px; line-height: 24px; font-weight: 600; }
+.form-body { font-family: var(--font-system); font-size: 16px; line-height: 24px; font-weight: 400; }
+.family-system { font-family: var(--font-system); font-size: 20px; line-height: 28px; font-weight: 600; }
+.family-serif { font-family: var(--font-serif); font-size: 20px; line-height: 28px; font-weight: 600; }
+.family-rounded { font-family: var(--font-rounded); font-size: 20px; line-height: 28px; font-weight: 600; }
+.family-mono { font-family: var(--font-mono); font-size: 18px; line-height: 26px; font-weight: 600; }
+.opt-space-grotesk { font-family: var(--font-space-grotesk); font-size: 22px; line-height: 30px; font-weight: 700; }
+.opt-figtree { font-family: var(--font-figtree); font-size: 22px; line-height: 30px; font-weight: 700; }
+.opt-ibm-plex-sans { font-family: var(--font-ibm-plex-sans); font-size: 22px; line-height: 30px; font-weight: 700; }
+.opt-geist { font-family: var(--font-geist); font-size: 22px; line-height: 30px; font-weight: 700; }
+.opt-fraunces { font-family: var(--font-fraunces); font-size: 22px; line-height: 30px; font-weight: 700; }
+.opt-instrument-serif { font-family: var(--font-instrument-serif); font-size: 22px; line-height: 30px; font-weight: 400; }
+.opt-silkscreen { font-family: var(--font-silkscreen); font-size: 20px; line-height: 30px; font-weight: 700; }
+.opt-jetbrains-mono { font-family: var(--font-jetbrains-mono); font-size: 22px; line-height: 30px; font-weight: 700; }

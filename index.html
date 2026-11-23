@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // The owner app follows the device's light/dark setting (design tokens: [data-theme]).
+      // On owner pages, the saved dev-mode color mode applies before first paint (src/admin/appearance.ts).
+      (function () {
+        var m = matchMedia('(prefers-color-scheme: dark)');
+        var mode = 'auto';
+        if (location.pathname.indexOf('/admin') === 0) {
+          try { mode = (JSON.parse(localStorage.getItem('fb-dev-settings') || '{}').mode) || 'auto'; } catch (e) {}
+        }
+        var set = function () { document.documentElement.dataset.theme = mode === 'auto' ? (m.matches ? 'dark' : 'light') : mode; };
+        set();
+        m.addEventListener('change', set);
+      })();
+    </script>
+    <title>Feedbacker</title>
+    <!-- The "Falling" mark (design system, Assets → Logos). The SVG switches inks with the browser's light/dark setting. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-48.png" sizes="48x48" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
