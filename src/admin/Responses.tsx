@@ -1,11 +1,12 @@
-// Responses page (ResponseSummary, ResponseTable): stat tiles, Summary/Table tabs and CSV export.
+// Responses page (ResponseSummary, ResponseTable): stat tiles, Graph/Table tabs and CSV export.
 import { createMemo, createResource, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { isQuestion, KIND_LABELS, type Answer, type Block, type FormDoc } from '../../shared/schema';
 import { api } from '../api';
 import { Icon } from '../ui/icons';
 import { Empty, Loading, Seg } from '../ui/kit';
 import { fmtDateTime, plural, TopBar } from './FormsList';
-import { DATE_COL, headerCycle, headerToView, nextHeader, questionsOf, summarize, toCsv, viewRows, type ActiveHeader, type Bar, type HeaderState, type Resp, type Summary, type TextAnswer } from './report';
+import { QuestionChart } from './Charts';
+import { DATE_COL, headerCycle, headerToView, nextHeader, questionsOf, summarize, toCsv, viewRows, type ActiveHeader, type HeaderState, type Resp, type Summary, type TextAnswer } from './report';
 import { devTheme } from './appearance';
 import { Link } from './router';
 import SharePanel from './SharePanel';
@@ -49,7 +50,7 @@ export default function Responses(props: { id: string }) {
 
   return (
     <div class="fb-app" data-dev-theme={devTheme()} style={{ "min-height": "100vh" }}>
-      <TopBar ticker={data() ? [data()!.doc.title || 'Untitled form', plural(data()!.responses.length, 'response'), 'Summary, table and CSV'] : undefined} />
+      <TopBar ticker={data() ? [data()!.doc.title || 'Untitled form', plural(data()!.responses.length, 'response'), 'Graph, table and CSV'] : undefined} />
       <main class="fb-wrap">
         <div style={{ display: 'flex', 'align-items': 'flex-end', gap: '16px', 'margin-bottom': '20px', 'flex-wrap': 'wrap' }}>
           <div style={{ flex: 1, display: 'flex', 'flex-direction': 'column', 'align-items': 'flex-start' }}>
@@ -89,13 +90,13 @@ export default function Responses(props: { id: string }) {
                   }
                 >
                   <div class="fb-rtools">
-                    <Seg label="View" value={tab()} onChange={setTab} options={[{ value: 'summary', label: 'Summary' }, { value: 'table', label: 'Table' }]} />
+                    <Seg label="View" value={tab()} onChange={setTab} options={[{ value: 'summary', label: 'Graph' }, { value: 'table', label: 'Table' }]} />
                     <span class="fb-sp" />
                     <button class="fb-btn fb-btn--secondary" onClick={downloadCsv}><Icon name="download" />Download CSV</button>
                   </div>
                   <Show when={tab() === 'summary'} fallback={<ResponseTable doc={d().doc} responses={d().responses} />}>
                     <div style={{ display: 'flex', 'flex-direction': 'column', gap: '16px' }}>
-                      <For each={questions()}>{(q) => <QuestionSummary q={q} s={summarize(q, d().responses)} />}</For>
+                      <For each={questions()}>{(q) => <QuestionSummary q={q} s={summarize(q, d().responses)} formId={props.id} />}</For>
                     </div>
                   </Show>
                 </Show>
@@ -111,7 +112,8 @@ export default function Responses(props: { id: string }) {
   );
 }
 
-function QuestionSummary(props: { q: Block; s: Summary }) {
+function QuestionSummary(props: { q: Block; s: Summary; formId: string }) {
+  const key = `fb-chart:${props.formId}:${props.q.id}`;
   return (
     <section class="fb-card fb-qcard">
       <div class="fb-qcard-h">
@@ -123,7 +125,7 @@ function QuestionSummary(props: { q: Block; s: Summary }) {
         <Match when={props.s.type === 'choice' && props.s}>
           {(s) => (
             <>
-              <Bars bars={s().bars} total={s().answered} />
+              <QuestionChart bars={s().bars} total={s().answered} saveKey={key} kinds={s().multi ? ['bar', 'column'] : ['bar', 'column', 'pie']} />
               <Show when={s().multi}><p class="fb-help">People could pick more than one, so this is the % of respondents and can add up to more than 100%.</p></Show>
               <Show when={s().others.length}>
                 <span class="fb-cap" style={{ 'text-transform': 'uppercase', 'letter-spacing': '.06em' }}>Typed under "{props.q.otherLabel?.trim() || 'Other'}"</span>
@@ -146,7 +148,9 @@ function QuestionSummary(props: { q: Block; s: Summary }) {
                   </div>
                 </Show>
               </div>
-              <Bars bars={props.q.kind === 'rating' ? [...s().bars].reverse().map((b) => ({ ...b, label: `${b.label} ${b.label === '1' ? 'star' : 'stars'}` })) : s().bars} total={s().answered} />
+              <QuestionChart total={s().answered} saveKey={key} kinds={['bar', 'column', 'line']}
+                bars={props.q.kind === 'rating' ? s().bars.map((b) => ({ ...b, label: `${b.label} ${b.label === '1' ? 'star' : 'stars'}` })) : s().bars}
+                barOrder={props.q.kind === 'rating' ? s().bars.map((b) => ({ ...b, label: `${b.label} ${b.label === '1' ? 'star' : 'stars'}` })).reverse() : undefined} />
               <div class="fb-lah">
                 <div><span class="fb-cap">Lowest</span><b>{s().min}</b></div>
                 <div><span class="fb-cap">Average</span><b>{s().avg}</b></div>
@@ -187,23 +191,6 @@ function Answers(props: { values: TextAnswer[] }) {
   );
 }
 
-/** Horizontal bars in option order; the most-picked label is bold; count and % are written out. */
-function Bars(props: { bars: Bar[]; total: number }) {
-  const top = () => Math.max(0, ...props.bars.map((b) => b.count));
-  return (
-    <ul class="fb-bars">
-      <For each={props.bars}>
-        {(b) => (
-          <li class="fb-bar" classList={{ 'is-top': b.count > 0 && b.count === top() }}>
-            <span class="fb-bar-l">{b.label}</span>
-            <span class="fb-bar-t" role="img" aria-label={`${b.count} of ${props.total}`}><span style={{ width: `${b.pct}%` }} /></span>
-            <span class="fb-bar-n">{b.count}<small>{Math.round(b.pct)}%</small></span>
-          </li>
-        )}
-      </For>
-    </ul>
-  );
-}
 
 /** The words for a header state, as shown in the header and the status line. */
 function stateWords(col: string, q: Block | undefined, st: HeaderState): string {

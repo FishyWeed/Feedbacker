@@ -304,3 +304,47 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
   html::-webkit-scrollbar-thumb, .fb-stage::-webkit-scrollbar-thumb { background-color: var(--root-sb-thumb, var(--border-strong)); }
   [data-dev-theme="arcade"] ::-webkit-scrollbar-thumb { border-radius: 0; }
 }
+
+/* Responses "Graph" charts (src/admin/Charts.tsx). One series: the theme accent, like the horizontal bars.
+   Pie: the validated categorical palette, stepped per mode (dataviz reference palette). Text stays in text tokens. */
+.fb-viz { --chart-fill: var(--accent); --chart-line: color-mix(in srgb, var(--border-strong) 70%, transparent); font-size: 13px; }
+[data-dev-theme="arcade"] .fb-viz { --chart-fill: var(--accent-ink); }
+.fb-viz { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s0: #9b9a94; }
+[data-theme="dark"] .fb-viz { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s0: #6f6e69; }
+.fb-chart-pick { display: flex; justify-content: flex-end; margin: -4px 0 4px; }
+
+.fb-colchart { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 2px; align-items: end; }
+.fb-colchart-c { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fb-colchart-plot { height: 180px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; border-bottom: 1px solid var(--chart-line); }
+.fb-colchart-bar { width: min(56px, 70%); min-height: 2px; background: var(--chart-fill); border-radius: 4px 4px 0 0; transition: opacity var(--t-hover) var(--ease); }
+.fb-colchart-n { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
+.fb-colchart-n small, .fb-pie .fb-bar-n small { margin-left: 4px; font-weight: 500; color: var(--muted); }
+.fb-colchart-l { text-align: center; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-colchart-c.is-top .fb-colchart-l { color: var(--text); font-weight: 650; }
+.fb-colchart:hover .fb-colchart-c:not(:hover) .fb-colchart-bar { opacity: .55; }
+
+.fb-linechart-plot { position: relative; height: 180px; margin: 20px 12px 0; }
+.fb-linechart-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.fb-linechart-base { stroke: var(--chart-line); stroke-width: 1; }
+.fb-linechart-line { fill: none; stroke: var(--chart-fill); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.fb-linechart-dot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--chart-fill); box-shadow: 0 0 0 2px var(--surface); }
+.fb-linechart-dot::after { content: ""; position: absolute; inset: -10px; } /* hit target bigger than the mark */
+.fb-linechart-dot b { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.fb-linechart-x { position: relative; height: 18px; margin: 8px 12px 0; color: var(--muted); }
+.fb-linechart-x span { position: absolute; top: 0; white-space: nowrap; }
+
+.fb-pie { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 24px; align-items: center; }
+.fb-pie svg { width: 160px; height: 160px; display: block; }
+.fb-pie-s { stroke: var(--surface); stroke-width: 1.2; transition: opacity var(--t-hover) var(--ease); } /* ~2px gap between slices */
+.fb-pie svg:hover .fb-pie-s:not(:hover) { opacity: .55; }
+.fb-pie-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.fb-pie-legend li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.fb-pie-legend i { width: 12px; height: 12px; border-radius: 3px; background: var(--surface2); box-shadow: inset 0 0 0 1px var(--border); }
+.fb-pie-legend li.is-zero { color: var(--muted); }
+.fb-pie-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-pie .s1 { fill: var(--s1); background: var(--s1); } .fb-pie .s2 { fill: var(--s2); background: var(--s2); }
+.fb-pie .s3 { fill: var(--s3); background: var(--s3); } .fb-pie .s4 { fill: var(--s4); background: var(--s4); }
+.fb-pie .s5 { fill: var(--s5); background: var(--s5); } .fb-pie .s6 { fill: var(--s6); background: var(--s6); }
+.fb-pie .s7 { fill: var(--s7); background: var(--s7); } .fb-pie .s0 { fill: var(--s0); background: var(--s0); }
+.fb-pie-legend i[class] { box-shadow: none; }
+@media (max-width: 560px) { .fb-pie { grid-template-columns: 1fr; justify-items: center; } .fb-pie-legend { width: 100%; } }
