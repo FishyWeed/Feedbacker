@@ -168,36 +168,33 @@ The proxy must send `X-Forwarded-Proto: https` (Caddy does this). The server the
 
 ### Option B: Fly.io
 
-The repository has a `fly.toml`: one machine, HTTPS, and a volume at `/app/data` for all data.
+The repository has a `fly.toml`: one machine, HTTPS, and a volume at `/app/data` for all data. One command makes the
+app, its data disk and its settings, then deploys. It never changes `fly.toml`, so you do not need to commit anything,
+and Fly's launch page and its pull request are not needed.
 
 **Warning:** Run exactly one machine. Each machine gets its own volume, so two machines would hold two different
-copies of your forms and responses.
+copies of your forms and responses. The script keeps one.
 
-1. Install `flyctl` (see [fly.io/docs/flyctl/install](https://fly.io/docs/flyctl/install/)) and sign in:
+1. Install `flyctl` (see [fly.io/docs/flyctl/install](https://fly.io/docs/flyctl/install/)) and sign in. Sign-in opens
+   your browser:
    ```bash
    fly auth login
    ```
-2. In the repository folder, create the app from the existing config. Pick a unique app name and the region nearest
-   to you. If it offers a database (Postgres, Redis), answer no: Feedbacker uses its own SQLite file. Do not deploy yet:
+2. In the repository folder (after `bun install`), run the script. Pick a unique app name and the region nearest to you
+   (`fly platform regions` lists them):
    ```bash
-   fly launch --copy-config --no-deploy
+   bun run deploy:fly -- --app <app-name> --region <region> --admin-email <your email>
    ```
-3. Create the volume in the same region (1 GB is plenty to start):
-   ```bash
-   fly volumes create feedbacker_data --size 1 --region <region>
-   ```
-4. Set your admin email and the client address header:
-   ```bash
-   fly secrets set ADMIN_EMAIL=<your email> CLIENT_IP_HEADER=Fly-Client-IP
-   ```
-5. Deploy, then open `https://<app-name>.fly.dev/admin/signup` and create your account:
-   ```bash
-   fly deploy
-   ```
+   It prints its plan first. Before it removes a machine that has no data disk (for example one made by Fly's launch
+   page), it asks you. Add `--signup closed` to stop new accounts after you made yours.
+3. Open `https://<app-name>.fly.dev/admin/signup` and create your account with the `--admin-email` address.
 
-To update, pull the new code and run `fly deploy` again. Your data stays on the volume. To back it up, download the
-folder with `fly ssh sftp shell` (`get /app/data/feedbacker.db`) or take a volume snapshot (`fly volumes snapshots`).
-For your own domain, run `fly certs add feedback.example.com` and point its DNS at the app.
+To update, pull the new code and run the same command again; steps that are already done are skipped, and your data
+stays on the volume. If a step fails, the script says which one; fix it and run the command again.
+
+To back up, download the folder with `fly ssh sftp shell -a <app-name>` (`get /app/data/feedbacker.db`) or take a
+volume snapshot (`fly volumes snapshots`). For your own domain, run `fly certs add feedback.example.com -a <app-name>`
+and point its DNS at the app.
 
 ### Option C: Railway
 
@@ -281,7 +278,7 @@ shared/      Code that the server and the browser both use
 src/
   form/      Public form (FormView is also the editor preview)
   admin/     Dev mode: sign-in, form list, editor, inspector, share dialog, responses
-scripts/     dev.ts starts the two dev servers
+scripts/     dev.ts starts the two dev servers; deploy-fly.ts deploys to Fly.io in one command
 ```
 
 - **Data:** Each form is one JSON document in the `forms` table. Each response is one row in the `responses` table.
