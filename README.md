@@ -48,7 +48,7 @@ You build a form in a drag-and-drop editor, share a link or a QR code, and read 
 | Runtime | [Bun](https://bun.com) 1.4+ |
 | Server | [Hono](https://hono.dev) 4, `bun:sqlite` |
 | Frontend | [Solid](https://solidjs.com) 1.9 + TSX, built with Vite 8 |
-| Drag and drop | [`@dnd-kit/solid`](https://dndkit.com) 0.5 |
+| Drag and drop | Own engine (`src/admin/dnd.ts`, `moves.ts`, `motion.ts`), no library |
 | QR codes | [`uqr`](https://github.com/unjs/uqr) (encoding) + our SVG renderer (`src/qr/`), [`jsqr`](https://github.com/cozmo/jsQR) for the scan check |
 
 The public form page loads about 22 KB (gzip) of JavaScript and CSS. The editor code loads only in dev mode.
@@ -107,6 +107,17 @@ Bun reads `.env` automatically. Never commit `.env`: it holds your password.
 **Warning:** Always serve Feedbacker over HTTPS in production. Without HTTPS, the owner password and the session cookie
 travel as plain text.
 
+All data (the SQLite database, uploaded images and the session secret) is in one folder, `/app/data`. Every option
+below keeps that folder on a persistent disk. Hosts without a persistent disk (Netlify, Vercel and other serverless
+hosts) cannot run Feedbacker.
+
+| Option | Best when | HTTPS |
+|---|---|---|
+| A: Docker on your own server | You have a server, or want the lowest cost and full control | You add Caddy (example below) |
+| B: Fly.io | You want a managed host and deploy from your computer with `fly deploy` | Included |
+| C: Railway | You want a managed host that deploys each push to GitHub | Included |
+| D: a plain server without Docker | You cannot use Docker | You add a reverse proxy |
+
 ### Option A: Docker (recommended)
 
 1. Make `.env` (see [Configuration](#configuration)).
@@ -130,16 +141,63 @@ feedback.example.com {
 
 The proxy must send `X-Forwarded-Proto: https` (Caddy does this). The server then marks the session cookie `Secure`.
 
-### Option B: a hosting platform with Docker support
+### Option B: Fly.io
 
-Fly.io, Railway, Render and similar platforms can build the `Dockerfile` in this repository.
+The repository has a `fly.toml`: one machine, HTTPS, and a volume at `/app/data` for all data.
 
-1. Create an app from the repository. Select the `Dockerfile` build.
-2. Set `ADMIN_USERNAME` and `ADMIN_PASSWORD` as secret environment variables.
-3. Attach a **persistent volume** at `/app/data`. If you do not, all forms and responses are lost on each deploy.
-4. Expose port `3000`.
+**Warning:** Run exactly one machine. Each machine gets its own volume, so two machines would hold two different
+copies of your forms and responses.
 
-### Option C: a plain server without Docker
+1. Install `flyctl` (see [fly.io/docs/flyctl/install](https://fly.io/docs/flyctl/install/)) and sign in:
+   ```bash
+   fly auth login
+   ```
+2. In the repository folder, create the app from the existing config. Pick a unique app name and the region nearest
+   to you. If it offers a database (Postgres, Redis), answer no: Feedbacker uses its own SQLite file. Do not deploy yet:
+   ```bash
+   fly launch --copy-config --no-deploy
+   ```
+3. Create the volume in the same region (1 GB is plenty to start):
+   ```bash
+   fly volumes create feedbacker_data --size 1 --region <region>
+   ```
+4. Set the owner sign-in as secrets (use a long password):
+   ```bash
+   fly secrets set ADMIN_USERNAME=<username> ADMIN_PASSWORD=<password>
+   ```
+5. Deploy, then open `https://<app-name>.fly.dev/admin`:
+   ```bash
+   fly deploy
+   ```
+
+To update, pull the new code and run `fly deploy` again. Your data stays on the volume. To back it up, download the
+folder with `fly ssh sftp shell` (`get /app/data/feedbacker.db`) or take a volume snapshot (`fly volumes snapshots`).
+For your own domain, run `fly certs add feedback.example.com` and point its DNS at the app.
+
+### Option C: Railway
+
+Railway builds the `Dockerfile` from your GitHub repository on each push, so it deploys what is on GitHub, not what is
+on your computer.
+
+**Warning:** Attach the volume before you add forms. Without it, every deploy deletes all forms and responses.
+
+**Warning:** Keep one replica. Each replica would have its own copy of the data.
+
+1. In Railway, create a project: **Deploy from GitHub repo**, and pick this repository.
+2. In the service's **Variables**, add `ADMIN_USERNAME` and `ADMIN_PASSWORD` (use a long password).
+3. Attach a volume to the service with the mount path `/app/data`.
+4. In **Settings → Networking**, select **Generate Domain** (or add your own domain). If Railway asks for a port, enter
+   `3000`.
+5. Open `https://<your-domain>/admin` and sign in.
+
+To update, push to GitHub; Railway builds and deploys the new version, and the data stays on the volume. You do not
+need the `RAILWAY_RUN_UID` variable: the container gives the volume to its own user at start, then runs without root
+rights. The Dockerfile has no `VOLUME` line on purpose, because Railway rejects it.
+
+Render and similar platforms work the same way: build the `Dockerfile`, set the two secrets, expose port `3000`, and
+attach a persistent disk at `/app/data`.
+
+### Option D: a plain server without Docker
 
 1. Install Bun 1.4+ on the server.
 2. Clone the repository, then run `bun install` and `bun run build`.
@@ -195,7 +253,7 @@ scripts/     dev.ts starts the two dev servers
 
 ### Known limits
 
-- The session secret is new on each server start, so a restart signs the owner out.
+- The session secret is stored in the data folder (`session.secret`). Changing `ADMIN_PASSWORD` signs every session out.
 - Public form submissions have no spam protection (no rate limit or captcha).
 - Behind a reverse proxy, the failed-sign-in count uses the proxy's address, so all visitors share one count.
 - Rules compare option text. If you rename an option, check the rules that use it.
@@ -223,12 +281,11 @@ If a user asks you to set up, run or deploy this project, follow these steps in 
 
 Rules for changes to the code:
 
-- Use **Solid 1.9**, not Solid 2. `@dnd-kit/solid` 0.5 supports only Solid 1.x. Upgrade only when `@dnd-kit/solid`
-  supports Solid 2.
+- Use **Solid 1.9**. Test the editor's drag and drop fully before any move to Solid 2.
 - In Solid components, do not destructure `props` (`({ title }) =>` breaks reactivity). Read `props.title`.
 - Keep answer checks in `shared/logic.ts`. The server must never trust the browser.
-- Drag and drop: the editor updates the store on each `dragover` and calls `preventDefault()`, so Solid owns the DOM.
-  Read the comments in `src/admin/editorStore.ts` before you change it.
+- Drag and drop follows the design system's `DragAndDrop.md`: the pointer engine is `src/admin/dnd.ts`, the placement
+  rules are `src/admin/moves.ts` (tested in `moves.test.ts`), and the motion is `src/admin/motion.ts`.
 - To add a theme, add an entry to `THEMES` in `shared/themes.ts` (light and dark palette, font, corners, background).
   To add a background, add it to `BACKGROUNDS` and write its CSS in `src/form/theme.css` (use only theme tokens,
   `cq` units, and animate only `transform` and `opacity`). The contrast test must pass.

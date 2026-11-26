@@ -1,0 +1,27 @@
+# Fly.io: one machine with one volume, because all data (SQLite database, uploads, session secret) lives in /app/data.
+# Never run more than one machine: each would get its own volume and its own copy of the data.
+# Setup steps: README.md, "Option B: Fly.io".
+
+app = "feedbacker" # must be unique on Fly.io: `fly launch` asks for a name and writes it here
+primary_region = "sin" # `fly launch` asks; `fly platform regions` lists them
+
+[env]
+  PORT = "3000"
+  DATABASE_PATH = "/app/data/feedbacker.db"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # Stop the machine when nobody uses it and start it on the next visit (a few seconds' wait). Sign-ins survive this.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[mounts]]
+  source = "feedbacker_data"
+  destination = "/app/data"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
