@@ -404,12 +404,12 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 .fb-bpv-node-h > .fb-i { color: var(--muted); flex: none; }
 
 /* Internal circuit: a spine down the left edge, a branch into each row, a track across each row's columns. */
-.fb-bpv-flow { position: relative; display: flex; flex-direction: column; gap: var(--gap, 10px); padding: 12px 12px 14px 30px; }
+.fb-bpv-flow { position: relative; display: flex; flex-direction: column; gap: var(--gap-y, 10px); padding: 12px 12px 14px 30px; }
 .fb-bpv-flow::before { content: ""; position: absolute; left: 15px; top: 0; bottom: 14px; border-left: 2px solid var(--border-strong); }
-.fb-bpv-row { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--gap, 10px); }
+.fb-bpv-row { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); column-gap: var(--gap-x, 10px); }
 .fb-bpv-row::before { content: ""; position: absolute; left: -15px; top: 17px; width: 15px; border-top: 2px solid var(--border-strong); }
 .fb-bpv-row::after { content: ""; position: absolute; left: -19px; top: 13px; width: 10px; height: 10px; border-radius: 50%; background: var(--border-strong); box-shadow: 0 0 0 2px var(--surface); }
-.fb-bpv-col { position: relative; display: flex; flex-direction: column; gap: var(--gap, 10px); min-width: 0; }
+.fb-bpv-col { position: relative; display: flex; flex-direction: column; gap: var(--gap-y, 10px); min-width: 0; }
 .fb-bpv-elw { position: relative; }
 .fb-bpv-el { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; min-height: 34px; padding: 6px 8px; text-align: left; cursor: pointer;
   background: var(--surface2); color: var(--muted); border: var(--bw, 1px) solid var(--border); border-radius: var(--radius-ctl); font-size: 12px; }
@@ -477,9 +477,9 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 /* Spacing handles: thin bars in the middle of the gaps between rows and columns, shown when the page is hovered. */
 .fb-bpv-gap { position: absolute; z-index: 2; opacity: 0; transition: opacity var(--t-hover) var(--ease); }
 .fb-bpv-gap::before { content: ""; position: absolute; border-radius: 2px; background: var(--border-strong); }
-.fb-bpv-gap.is-row { left: 25%; right: 25%; height: 12px; bottom: calc(var(--gap, 10px) / -2 - 6px); cursor: row-resize; }
+.fb-bpv-gap.is-row { left: 25%; right: 25%; height: 12px; bottom: calc(var(--gap-y, 10px) / -2 - 6px); cursor: row-resize; }
 .fb-bpv-gap.is-row::before { left: 0; right: 0; top: 5px; height: 2px; }
-.fb-bpv-gap.is-col { top: 50%; bottom: 0; width: 12px; right: calc(var(--gap, 10px) / -2 - 6px); cursor: col-resize; }
+.fb-bpv-gap.is-col { top: 50%; bottom: 0; width: 12px; right: calc(var(--gap-x, 10px) / -2 - 6px); cursor: col-resize; }
 .fb-bpv-gap.is-col::before { top: 0; bottom: 0; left: 5px; width: 2px; }
 .fb-bpv-node:hover .fb-bpv-gap, .fb-bpv-gap:focus-visible { opacity: .6; }
 .fb-bpv-gap:hover, .fb-bpv-gap:focus-visible { opacity: 1; }

@@ -63,7 +63,7 @@ export default function Blueprint() {
   const [zoom, setZoom] = createSignal(1);
   const [sizeDrag, setSizeDrag] = createSignal<{ id: string; w: number; h: number } | null>(null);
   const [elemBend, setElemBend] = createSignal<{ key: string; x: number; y: number } | null>(null);
-  const [gapDrag, setGapDrag] = createSignal<{ id: string; v: number } | null>(null);
+  const [gapDrag, setGapDrag] = createSignal<{ id: string; x: number; y: number } | null>(null);
   const [drag, setDrag] = createSignal<{ id: string; x: number; y: number } | null>(null);
   const [bendDrag, setBendDrag] = createSignal<{ id: string; x: number; y: number } | null>(null);
   const [menu, setMenu] = createSignal<Menu | null>(null);
@@ -113,7 +113,7 @@ export default function Blueprint() {
 
   const widthOf = (s: Section) => { const d = sizeDrag(); return d?.id === s.id ? d.w : s.size?.w ?? NODE_W; };
   const DEFAULT_GAP = 10;
-  const spacingOf = (s: Section) => { const d = gapDrag(); return d?.id === s.id ? d.v : s.spacing ?? DEFAULT_GAP; };
+  const spacingOf = (s: Section) => { const d = gapDrag(); return d?.id === s.id ? d : s.spacing ?? { x: DEFAULT_GAP, y: DEFAULT_GAP }; };
   const minHeightOf = (s: Section) => { const d = sizeDrag(); return d?.id === s.id ? d.h : s.size?.h ?? 0; };
   const autoXs = createMemo(() => { let x = 160; return ed.doc.sections.map((s) => { const at = x; x += widthOf(s) + GAP_X; return at; }); });
   const auto = (i: number): Pt => ({ x: autoXs()[i] ?? 160, y: 90 });
@@ -223,26 +223,33 @@ export default function Blueprint() {
       setSizeDrag(null);
     });
   }
-  // --- Spacing inside a page: drag a handle between rows (down) or columns (right); arrow keys; double-click resets. ---
+  // --- Spacing inside a page, per axis: a bar between rows changes only the vertical space (rows and stacked blocks),
+  // a bar between columns only the horizontal space. Drag, arrow keys, or double-click to reset that axis. ---
+  const clampGap = (n: number) => Math.round(Math.max(0, Math.min(200, n)));
+  const setSpacing = (s: Section, axis: 'x' | 'y', v: number | null) => {
+    const now = spacingOf(s);
+    ed.actions.updateSection(s.id, { spacing: { x: now.x, y: now.y, [axis]: v === null ? DEFAULT_GAP : clampGap(v) } });
+  };
   function pressGap(s: Section, axis: 'x' | 'y', e: PointerEvent) {
     if (e.button !== 0 || wire()) return;
     e.stopPropagation();
-    const v0 = spacingOf(s);
-    // A gap is shared by two neighbours, so the pointer moves it half as fast as it opens: double the movement.
-    dragBy(e, (dx, dy) => setGapDrag({ id: s.id, v: Math.max(0, Math.min(200, v0 + 2 * (axis === 'x' ? dx : dy))) }), (moved) => {
+    const v0 = { x: spacingOf(s).x, y: spacingOf(s).y };
+    // The bar sits in the middle of its gap, so the gap grows twice as fast as the bar moves.
+    dragBy(e, (dx, dy) => setGapDrag({ id: s.id, ...v0, [axis]: clampGap(v0[axis] + 2 * (axis === 'x' ? dx : dy)) }), (moved) => {
       const d = gapDrag();
-      if (moved && d) { ed.actions.updateSection(s.id, { spacing: Math.round(d.v) }); eatNextClick(); }
+      if (moved && d) { setSpacing(s, axis, d[axis]); eatNextClick(); }
       setGapDrag(null);
     });
   }
-  function keyGap(s: Section, e: KeyboardEvent) {
+  function keyGap(s: Section, axis: 'x' | 'y', e: KeyboardEvent) {
     const a = ARROWS[e.key];
     if (!a) return;
     e.preventDefault();
-    const step = (e.shiftKey ? 3 : 1) * 4 * (a.x + a.y);
-    ed.actions.updateSection(s.id, { spacing: Math.max(0, Math.min(200, spacingOf(s) + step)) });
+    const step = (e.shiftKey ? 12 : 4) * (axis === 'x' ? a.x || -a.y : a.y || a.x);
+    setSpacing(s, axis, spacingOf(s)[axis] + step);
   }
-  const gapLabel = (s: Section) => `Space between blocks: ${spacingOf(s)} pixels. Drag or use the arrow keys; double-click resets.`;
+  const gapLabel = (s: Section, axis: 'x' | 'y') =>
+    `${axis === 'y' ? 'Space between rows' : 'Space between columns'}: ${spacingOf(s)[axis]} pixels. Drag or use the arrow keys; double-click resets.`;
 
   function keyResize(s: Section, e: KeyboardEvent) {
     const a = ARROWS[e.key];
@@ -413,7 +420,7 @@ export default function Blueprint() {
     }
     setChips(out);
   }
-  createEffect(() => { positions(); heights(); layoutKey(); ed.doc.sections.map(widthOf); ed.doc.sections.map(spacingOf); queueMicrotask(measureChips); });
+  createEffect(() => { positions(); heights(); layoutKey(); ed.doc.sections.map(widthOf); ed.doc.sections.map((x) => { const g = spacingOf(x); return g.x + g.y; }); queueMicrotask(measureChips); });
   const SHORT: Record<string, (v: string) => string> = {
     equals: (v) => `"${v}"`, not_equals: (v) => `not "${v}"`, contains: (v) => `has "${v}"`, gt: (v) => `> ${v}`, lt: (v) => `< ${v}`,
     answered: () => 'answered', not_answered: () => 'not answered',
@@ -514,21 +521,21 @@ export default function Blueprint() {
                   <Show when={s.showIf}><span class="fb-badge fb-badge--cond"><Icon name="branch" />If</span></Show>
                 </header>
                 {/* The internal circuit: down through each row, across each row's columns. */}
-                <div class="fb-bpv-flow" style={{ '--gap': `${spacingOf(s)}px` }}>
+                <div class="fb-bpv-flow" style={{ '--gap-x': `${spacingOf(s).x}px`, '--gap-y': `${spacingOf(s).y}px` }}>
                   <Show when={s.rows.some((r) => r.columns.some((c) => c.blocks.length))} fallback={<p class="fb-bpv-empty">No blocks yet</p>}>
                     <For each={s.rows}>
                       {(r, ri) => (
                         <div class="fb-bpv-row" style={{ '--n': r.columns.length }}>
                           <Show when={ri() < s.rows.length - 1}>
-                            <span class="fb-bpv-gap is-row" role="separator" aria-orientation="horizontal" tabIndex={0} aria-label={gapLabel(s)} title="Drag to space the blocks apart"
-                              onPointerDown={(e) => pressGap(s, 'y', e)} onKeyDown={(e) => keyGap(s, e)} onDblClick={() => ed.actions.updateSection(s.id, { spacing: undefined })} />
+                            <span class="fb-bpv-gap is-row" role="separator" aria-orientation="horizontal" tabIndex={0} aria-label={gapLabel(s, 'y')} title="Drag up or down: space between rows · Double-click resets"
+                              onPointerDown={(e) => pressGap(s, 'y', e)} onKeyDown={(e) => keyGap(s, 'y', e)} onDblClick={() => setSpacing(s, 'y', null)} />
                           </Show>
                           <For each={r.columns}>
                             {(c, ci) => (
                               <div class="fb-bpv-col">
                                 <Show when={ci() < r.columns.length - 1}>
-                                  <span class="fb-bpv-gap is-col" role="separator" aria-orientation="vertical" tabIndex={0} aria-label={gapLabel(s)} title="Drag to space the blocks apart"
-                                    onPointerDown={(e) => pressGap(s, 'x', e)} onKeyDown={(e) => keyGap(s, e)} onDblClick={() => ed.actions.updateSection(s.id, { spacing: undefined })} />
+                                  <span class="fb-bpv-gap is-col" role="separator" aria-orientation="vertical" tabIndex={0} aria-label={gapLabel(s, 'x')} title="Drag left or right: space between columns · Double-click resets"
+                                    onPointerDown={(e) => pressGap(s, 'x', e)} onKeyDown={(e) => keyGap(s, 'x', e)} onDblClick={() => setSpacing(s, 'x', null)} />
                                 </Show>
                                 <For each={c.blocks}>
                                   {(b) => (

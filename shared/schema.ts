@@ -51,9 +51,9 @@ export type Column = { id: string; blocks: Block[] };
 export type Row = { id: string; columns: Column[] };
 /**
  * A section is one page of the form. Blueprint view only (owner, never shown to visitors): `pos` is where its node
- * sits, `bend` moves the middle of the line that leads into it, `size` is its width and minimum height, `spacing` the gap between its blocks.
+ * sits, `bend` moves the middle of the line that leads into it, `size` is its width and minimum height, `spacing` the gaps between its blocks (x: between columns, y: between rows and stacked blocks).
  */
-export type Section = { id: string; title?: string; showIf?: Rule; rows: Row[]; pos?: { x: number; y: number }; bend?: { x: number; y: number }; size?: { w: number; h: number }; spacing?: number };
+export type Section = { id: string; title?: string; showIf?: Rule; rows: Row[]; pos?: { x: number; y: number }; bend?: { x: number; y: number }; size?: { w: number; h: number }; spacing?: { x: number; y: number } };
 export type FormDoc = {
   title: string; description?: string; thankYou?: string; sections: Section[];
   theme?: FormTheme; background?: FormBackground; qr?: QrDesign; typography?: FormTypography;
@@ -108,6 +108,14 @@ function parseBends(x: unknown): Record<string, { x: number; y: number }> | unde
   const out: Record<string, { x: number; y: number }> = {};
   for (const [k, v] of Object.entries(x).slice(0, 50)) { const p = parsePos(v); if (id(k) && p) out[k] = p; }
   return Object.keys(out).length ? out : undefined;
+}
+
+/** Blueprint spacing, 0 to 200 per axis. An older single number counts for both axes. */
+function parseSpacing(x: unknown): { x: number; y: number } | undefined {
+  const c = (n: number) => Math.round(Math.max(0, Math.min(200, n)));
+  if (num(x) !== undefined) return { x: c(x as number), y: c(x as number) };
+  if (!isObj(x) || num(x.x) === undefined || num(x.y) === undefined) return undefined;
+  return { x: c(x.x), y: c(x.y) };
 }
 
 /** A blueprint node size: width 200 to 1200, extra height 0 to 4000. */
@@ -166,7 +174,7 @@ export function parseFormDoc(x: unknown): FormDoc | null {
       }
       rows.push({ id: r.id, columns });
     }
-    sections.push({ id: s.id, title: str(s.title, 500), showIf: parseRule(s.showIf), rows, pos: parsePos(s.pos), bend: parsePos(s.bend), size: parseSize(s.size), spacing: num(s.spacing) === undefined ? undefined : Math.round(Math.max(0, Math.min(200, s.spacing))) });
+    sections.push({ id: s.id, title: str(s.title, 500), showIf: parseRule(s.showIf), rows, pos: parsePos(s.pos), bend: parsePos(s.bend), size: parseSize(s.size), spacing: parseSpacing(s.spacing) });
   }
   // Ids are answer keys and drag-and-drop keys, so they must be unique.
   const ids = sections.flatMap((s) => [s.id, ...s.rows.flatMap((r) => [r.id, ...r.columns.flatMap((c) => [c.id, ...c.blocks.map((b) => b.id)])])]);
