@@ -3,7 +3,7 @@ import { resolveQr } from '../../shared/qr';
 import type { FormDoc } from '../../shared/schema';
 import { resolveTheme } from '../../shared/themes';
 import { api } from '../api';
-import { safeUrl } from '../form/FormView';
+import { logoHref } from '../qr/logos';
 import { downloadPng, downloadSvg, fileName, finalSvg } from '../qr/export';
 import { qrSvg } from '../qr/render';
 import { Icon } from '../ui/icons';
@@ -22,7 +22,7 @@ export default function SharePanel(props: { id: string; title: string; doc?: For
   const doc = () => props.doc ?? loaded()?.doc;
   const published = () => props.published ?? (loaded() ? loaded()!.publishedAt !== null : true);
   const style = createMemo(() => (doc() ? resolveQr(doc()!.qr, resolveTheme(doc()!.theme)) : undefined));
-  const logo = () => (doc()?.qr?.mode === 'custom' ? safeUrl(doc()!.qr!.logo) : undefined);
+  const logo = () => (doc()?.qr?.mode === 'custom' && style() ? logoHref(doc()!.qr!.logo, style()!) : undefined);
   const [copied, setCopied] = createSignal(false);
 
   async function copy() {

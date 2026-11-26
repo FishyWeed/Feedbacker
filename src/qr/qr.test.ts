@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { captionColorOf, colorProblems, DEFAULT_QR, frameColorOf, GRADIENT_PRESETS, parseQr, resolveQr, stopNames, stops } from '../../shared/qr';
 import { resolveTheme } from '../../shared/themes';
+import { logoHref } from './logos';
 import { qrSvg } from './render';
 
 const ocean = resolveTheme({ preset: 'ocean', mode: 'dark' });
@@ -81,4 +82,16 @@ test('warnings name each gradient color as the controls do, with its hex', () =>
   expect(corners).toEqual(['The bottom right gradient color (#23B6E7) is too close to the background (#FFFFFF). Use a darker color, at least 4:1 against it.']);
   expect(stopNames('linear', 3)).toEqual(['Start', 'Middle', 'End']);
   expect(stopNames('radial', 2)).toEqual(['Centre', 'Edge']);
+});
+
+test('ready-made logos: kept by parseQr, drawn in the code color; unknown ones and unsafe links are dropped', () => {
+  expect(parseQr({ mode: 'custom', logo: 'preset:heart' })!.logo).toBe('preset:heart');
+  expect(parseQr({ mode: 'custom', logo: 'preset:evil' })!.logo).toBeUndefined();
+  const s = { fg: '#123456', bg: '#fafafa', gradient: 'none' as const, colors: ['#123456', '#654321'] };
+  const href = logoHref('preset:star', s)!;
+  expect(href.startsWith('data:image/svg+xml,')).toBe(true);
+  expect(decodeURIComponent(href)).toContain('stroke="#123456"');
+  expect(decodeURIComponent(logoHref('preset:star', { ...s, gradient: 'linear' })!)).toContain('stroke="#123456"'); // first gradient color
+  expect(logoHref('/uploads/abcdefghij0123456789.png', s)).toBe('/uploads/abcdefghij0123456789.png');
+  expect(logoHref('javascript:alert(1)', s)).toBeUndefined();
 });

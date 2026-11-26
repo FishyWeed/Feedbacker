@@ -1,10 +1,10 @@
 // The editor's "QR code" tab (QRDesigner): default or custom design, with a live scan check.
 import { createEffect, createMemo, createSignal, For, Index, Match, on, onCleanup, Show, Switch } from 'solid-js';
 import { unwrap } from 'solid-js/store';
-import { colorProblems, DEFAULT_QR, frameColorOf, DOT_STYLES, EYE_DOTS, EYE_FRAMES, GRADIENT_PRESETS, MAX_STOPS, resolveQr, stopNames, stops, type Gradient, type QrDesign, type QrStyle } from '../../shared/qr';
+import { colorProblems, DEFAULT_QR, frameColorOf, DOT_STYLES, EYE_DOTS, EYE_FRAMES, GRADIENT_PRESETS, MAX_STOPS, presetLogo, QR_LOGOS, resolveQr, stopNames, stops, type Gradient, type QrDesign, type QrStyle } from '../../shared/qr';
 import { resolveTheme } from '../../shared/themes';
-import { safeUrl } from '../form/FormView';
 import { canScan, downloadPng, downloadSvg, fileName, finalSvg } from '../qr/export';
+import { logoHref } from '../qr/logos';
 import { qrSvg } from '../qr/render';
 import { Icon } from '../ui/icons';
 import { ColorField, Range, Seg } from '../ui/kit';
@@ -52,7 +52,16 @@ export default function QrDesigner(props: { formId: string }) {
   const theme = createMemo(() => resolveTheme(ed.doc.theme));
   const style = createMemo(() => resolveQr(design(), theme()));
   const custom = () => design().mode === 'custom';
-  const logo = () => (custom() ? safeUrl(design().logo) : undefined);
+  const logo = () => (custom() ? logoHref(design().logo, style()) : undefined);
+  // Center logo: none, a ready-made one, or Custom (an uploaded image or a web address).
+  const [customLogo, setCustomLogo] = createSignal(false);
+  const logoChoice = () => presetLogo(design().logo) ?? (design().logo || customLogo() ? 'custom' : 'none');
+  const pickLogo = (choice: string) => {
+    setCustomLogo(choice === 'custom');
+    if (choice === 'none') set({ logo: undefined });
+    else if (choice !== 'custom') set({ logo: `preset:${choice}` });
+    else if (presetLogo(design().logo)) set({ logo: undefined }); // Custom starts empty: upload or paste an image
+  };
   const link = shareLink(props.formId);
   const svg = createMemo(() => qrSvg(link, style(), logo()));
   const status = useScanCheck(() => link, style, logo);
@@ -217,10 +226,27 @@ export default function QrDesigner(props: { formId: string }) {
             </div>
 
             <div class="fb-field">
-              <span class="fb-label">Center logo</span>
-              <MediaPicker url={design().logo} accept="image/png,image/jpeg,image/gif,image/webp" what="a logo" limits="square PNG works best · up to 5 MB"
-                onChange={(url) => set({ logo: url || undefined })} />
-              <p class="fb-help">Logos use high error correction (30%) so the code still scans.</p>
+              <span class="fb-label" id="qr-logo-l">Center logo</span>
+              <div class="fb-eyes fb-qr-logos" role="radiogroup" aria-labelledby="qr-logo-l">
+                <button type="button" class="fb-eye" role="radio" aria-checked={logoChoice() === 'none'} aria-label="No logo" title="No logo" onClick={() => pickLogo('none')}>
+                  <Icon name="x" />
+                </button>
+                <For each={QR_LOGOS}>
+                  {(l) => (
+                    <button type="button" class="fb-eye" role="radio" aria-checked={logoChoice() === l.id} aria-label={l.name} title={l.name} onClick={() => pickLogo(l.id)}>
+                      <img src={logoHref(`preset:${l.id}`, style())} alt="" width="32" height="32" />
+                    </button>
+                  )}
+                </For>
+                <button type="button" class="fb-eye fb-qr-logo-own" role="radio" aria-checked={logoChoice() === 'custom'} title="Your own image" onClick={() => pickLogo('custom')}>
+                  <Icon name="upload" /><span>Custom</span>
+                </button>
+              </div>
+              <Show when={logoChoice() === 'custom'}>
+                <MediaPicker url={design().logo} accept="image/png,image/jpeg,image/gif,image/webp" what="a logo" limits="square PNG works best · up to 5 MB"
+                  onChange={(url) => set({ logo: url || undefined })} />
+              </Show>
+              <p class="fb-help">Ready-made logos take the code's colors. Logos use high error correction (30%) so the code still scans.</p>
             </div>
             <Show when={design().logo}>
               <Range label="Logo size" min={10} max={25} value={design().logoSize} format={(v) => `${v}% of the code`} onInput={(logoSize) => set({ logoSize })} />

@@ -13,6 +13,19 @@ export type Gradient = (typeof GRADIENTS)[number];
 
 export const MAX_STOPS = 4;
 
+/** Ready-made center logos. They are drawn in the code's color on its background (src/qr/logos.ts). */
+export const QR_LOGOS = [
+  { id: 'feedbacker', name: 'Feedbacker' }, { id: 'star', name: 'Star' }, { id: 'heart', name: 'Heart' },
+  { id: 'chat', name: 'Chat' }, { id: 'smile', name: 'Smile' }, { id: 'thumbs-up', name: 'Thumbs up' },
+  { id: 'check', name: 'Check' }, { id: 'mail', name: 'Mail' }, { id: 'link', name: 'Link' },
+  { id: 'calendar', name: 'Calendar' }, { id: 'wifi', name: 'Wi-Fi' },
+] as const;
+export type QrLogoId = (typeof QR_LOGOS)[number]['id'];
+export const presetLogo = (logo?: string): QrLogoId | undefined => {
+  const id = logo?.startsWith('preset:') ? logo.slice(7) : '';
+  return QR_LOGOS.find((l) => l.id === id)?.id;
+};
+
 export type QrDesign = {
   mode: 'default' | 'custom';
   matchTheme: boolean; // use the form theme colors instead of fg/eye/bg/colors
@@ -26,7 +39,7 @@ export type QrDesign = {
   eye: string; // corner color
   eyeGradient: boolean; // corners use the gradient too
   bg: string;
-  logo?: string; // URL of an uploaded image
+  logo?: string; // "preset:<id>" (QR_LOGOS), or the URL of an uploaded image
   logoSize: number; // 10-25 % of the code width
   margin: number; // quiet zone, 1-6 modules
   frame: boolean;
@@ -145,7 +158,7 @@ export function parseQr(x: any): QrDesign | undefined {
     colors: colors.length ? colors : D.colors,
     angle: ((num(x.angle, -3600, 3600, D.angle) % 360) + 360) % 360,
     eyeGradient: x.eyeGradient === true,
-    logo: typeof x.logo === 'string' && /^(https?:\/\/|\/uploads\/)/i.test(x.logo) ? x.logo.slice(0, 2000) : undefined,
+    logo: presetLogo(x.logo) ? x.logo : typeof x.logo === 'string' && /^(https?:\/\/|\/uploads\/)/i.test(x.logo) ? x.logo.slice(0, 2000) : undefined,
     logoSize: num(x.logoSize, 10, 25, D.logoSize),
     margin: num(x.margin, 1, 6, D.margin),
     frame: x.frame === true,

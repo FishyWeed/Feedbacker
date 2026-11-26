@@ -6,7 +6,7 @@ const dataUrls = new Map<string, Promise<string | undefined>>();
 
 /** The logo as a data URL, so it is kept when the SVG becomes an image or a file. */
 export function inlineLogo(url: string | undefined): Promise<string | undefined> {
-  if (!url) return Promise.resolve(undefined);
+  if (!url || url.startsWith('data:')) return Promise.resolve(url); // presets are data URLs already
   if (!dataUrls.has(url)) {
     dataUrls.set(url, fetch(url)
       .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('Logo not found'))))

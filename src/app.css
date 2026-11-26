@@ -239,7 +239,17 @@ input, textarea, [contenteditable] { caret-color: var(--accent-ink, var(--accent
 .fb-done > .fb-logo { margin: 0 auto 8px; }
 
 /* Landing: the phone and tablet menu (design system: links move into a sheet). */
-.lp .lp-nav { position: relative; }
+/* The nav stays at the top while the page scrolls. `overflow: clip` (not hidden) on .lp, because a scroll container
+   around it would stop the sticky nav. */
+.lp { overflow: clip; }
+.lp .lp-nav { position: sticky; top: 0; z-index: 25; background: var(--bg); box-shadow: 0 1px 0 var(--border); }
+.lp--arcade .lp-nav { background: var(--surface); box-shadow: none; }
+/* Side room: wider than the design system's 48/32/16px, and the content stays at most 1280px wide on big screens. */
+.lp { --lp-x: 88px; --lp-gutter: max(var(--lp-x), calc((100% - 1280px) / 2)); }
+@media (min-width: 761px) and (max-width: 1100px) { .lp { --lp-x: 48px; } }
+@media (max-width: 760px) { .lp { --lp-x: 24px; } }
+.lp .lp-nav, .lp .lp-hero, .lp .lp-strip, .lp .lp-sec, .lp .lp-foot { padding-left: var(--lp-gutter); padding-right: var(--lp-gutter); }
+.lp .lp-cta { margin-left: var(--lp-gutter); margin-right: var(--lp-gutter); }
 .lp-menu-box { display: contents; }
 .lp-sheet { position: absolute; top: calc(100% - 4px); right: 16px; z-index: 30; }
 
@@ -504,3 +514,8 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 .fb-bpv-elw:hover .fb-bpv-elsize, .fb-bpv-elsize:focus-visible, .fb-bpv-elw:has(.is-selected) .fb-bpv-elsize { opacity: 1; }
 .fb-bpv-elsize:hover::before, .fb-bpv-elsize:focus-visible::before { border-color: var(--accent-ink, var(--accent)); }
 
+/* QR center logo choices: none, the ready-made logos and Custom (an own image) */
+.fb-qr-logos { grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); }
+.fb-qr-logos .fb-eye { height: 52px; }
+.fb-qr-logos .fb-eye img { width: 30px; height: 30px; border-radius: 6px; box-shadow: 0 0 0 1px var(--border); }
+.fb-qr-logo-own { grid-column: span 2; display: flex; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text); }

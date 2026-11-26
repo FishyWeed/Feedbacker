@@ -50,6 +50,10 @@ def wire(s):
     s = s.replace('<a href="#">Docs</a><a href="#">GitHub</a><a href="#">License</a>',
                   '<a href={REPO}>GitHub</a><a href={REPO} target="_blank" rel="noopener">Star on GitHub</a>')
     s = s.replace('<a class="fb-foot" href="#">', '<a class="fb-foot" href="/">')
+    # The QR card's caption is not wanted on the page.
+    s = s.replace('<span class="fb-cap" style="margin-top:12px">Printed on the receipt</span>', '')
+    # Signed in: "Dashboard" instead of "Sign in".
+    s = s.replace('href="/admin">Sign in', 'href="/admin">{props.signedIn ? "Dashboard" : "Sign in"}')
     assert 'href="#"' not in s, re.findall(r'.{80}href="#".{40}', s)
     # Decorative mock-ups: hidden from screen readers and not focusable.
     s = s.replace('<div style="position:relative">', '<div style="position:relative"' + DECOR + '>', 1)
@@ -63,7 +67,7 @@ HEAD = '''// Generated from the design system card "{card}" by scripts/build-lan
 import {{ Brand }} from '../ui/kit';
 import {{ copyCmd, DOCS, jump, LandingMenu, REPO, StarBox }} from './shared';
 
-export default function {fn}(props: {{ intro: boolean; signup: boolean }}) {{
+export default function {fn}(props: {{ intro: boolean; signup: boolean; signedIn: boolean }}) {{
   return (
 '''
 for fn, card in [('LandingPaper', 'LandingPaperFull'), ('LandingArcade', 'LandingArcadeFull')]:
