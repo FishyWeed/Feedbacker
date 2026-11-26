@@ -1,9 +1,20 @@
 # Feedbacker
 
-Feedbacker is a small, self-hosted web app to make forms and collect feedback.
+Feedbacker is a small web app to make forms and collect feedback.
 You build a form in a drag-and-drop editor, share a link or a QR code, and read the answers.
 
-- **Owner only:** Only the owner can open dev mode (`/admin`). The username and password come from `.env`.
+There are two ways to use it:
+
+| Way | For whom | How |
+|---|---|---|
+| **Use the website** | People who want forms without running a server | Open the Feedbacker website, select **Create a free account**, and sign in with your email and password. Your forms, answers and uploads are private to your account. |
+| **Self-host with Docker** | People who want their own copy on their own hosting service or VPS | Run `docker compose up -d` (see [Deploy](#deploy)). Your copy has one owner, whose username and password are in `.env`. |
+
+The same code runs both: `MODE=single` (the default) is the self-hosted copy with one owner, and `MODE=hosted` is the
+public website with open sign-up. See [Run the public website](#run-the-public-website-modehosted).
+
+- **Private dev mode:** Only signed-in owners can open dev mode (`/admin`). A self-hosted copy has one owner from
+  `.env`. On the website, each account sees only its own forms.
 - **Drag-and-drop editor:** Sections contain rows. Rows contain 1 to 4 columns. Columns contain blocks.
   Drag blocks, rows and sections to move them. Drop a block above, between or below rows to make a new row.
 - **"Other" option:** single and multiple choice can add an "Other" choice (you can rename it) where people type
@@ -15,9 +26,10 @@ You build a form in a drag-and-drop editor, share a link or a QR code, and read 
   conditional page or question gets a dashed line labeled with its rule, plus an "Otherwise" skip. Click the dot beside
   a question, pick an answer and pull the wire to a later question or page to set a condition. The dots on a page's
   sides add a page or connect pages (the page you connect to comes next). Drag nodes and line labels to arrange them,
-  resize a page from its corner, and drag the bars between its blocks to space them apart. Right-drag or scroll to pan;
-  Ctrl+wheel, a pinch or Ctrl +/-/0 zoom the board. The side panel can be hidden or docked left, right or bottom.
-  Save draft keeps the layout.
+  resize a page or a block's box from its corner (a box stops at the page border), and drag a row's dot on the page's
+  left side to add room above that row. Right-drag or scroll to pan; Ctrl+wheel, a pinch or Ctrl +/-/0 zoom the board.
+  The side panel docks left, right or bottom, resizes from its inner edge and collapses to a rail. Save draft keeps
+  the layout.
 - **Conditional logic:** A section or block can show only if earlier answers match rules
   (for example "Show if *Did you like it?* is *No*").
 - **Images:** upload a PNG, JPEG, GIF or WebP file (up to 5 MB) from your computer, or use an image URL.
@@ -32,7 +44,8 @@ You build a form in a drag-and-drop editor, share a link or a QR code, and read 
 - **Drafts and publishing:** Save draft keeps your work without touching the live link. Publish updates the live link.
   New forms are not live until their first Publish.
 - **Dev mode settings** (`/admin/settings`): 7 dev themes (Default, Workbench, Blueprint, Arcade, Ink, Dusk, Paper),
-  Auto/Light/Dark, and fonts for the interface, headings and labels, with pairing presets. Only the owner sees these.
+  Auto/Light/Dark, and fonts for the interface, headings and labels, with pairing presets. Each account has its own.
+  On the website, Settings → Account also changes the password and deletes the account.
 - **Preview and share link** for each form.
 - **QR codes:** a plain default code, or a custom one: "match the form theme" or your own colors, gradients (linear at any angle,
   radial, or one color per corner; 2-4 colors; 8 presets),
@@ -40,7 +53,9 @@ You build a form in a drag-and-drop editor, share a link or a QR code, and read 
   each design while you edit it. Download as PNG or SVG.
 - **Responses:** a summary with counts, percentages and averages for each question, a table you can search, sort and
   filter from its column titles, and a CSV export. The forms list can be sorted and filtered too.
-- **Landing page** at `/`: Paper by default, or Arcade (Settings → Appearance → Landing page). Dev mode is at `/admin`.
+- **Landing page** at `/`: Paper by default, or Arcade (Settings → Appearance → Landing page; on the website only the
+  `ADMIN_EMAIL` account can change it). On the website its first button is **Create a free account**, and
+  **Self-host it** comes second. Dev mode is at `/admin`.
 - **Status ticker**: in the Arcade and Paper dev themes, a scrolling line under the top bar repeats the page's key facts
   (save state, counts, settings). Screen readers skip it; every fact also shows on the page. It stops under reduced motion.
 - **Logo and motion**: the "Falling" mark from the design system, with a favicon that follows light and dark mode.
@@ -104,8 +119,12 @@ Bun reads `.env` automatically. Never commit `.env`: it holds your password.
 
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
-| `ADMIN_USERNAME` | Yes | – | Owner username for dev mode. |
-| `ADMIN_PASSWORD` | Yes | – | Owner password. At least 8 characters. The server does not start without it. |
+| `MODE` | No | `single` | `single`: a self-hosted copy with one owner. `hosted`: the public website with open sign-up. |
+| `ADMIN_USERNAME` | In `single` mode | – | Owner username for dev mode. |
+| `ADMIN_PASSWORD` | In `single` mode | – | Owner password. At least 8 characters. In `single` mode the server does not start without it. |
+| `ADMIN_EMAIL` | No | – | `hosted` mode: the site owner's account email. That account sets the landing page look and takes over the forms made before the switch from `single` mode. |
+| `UPLOAD_LIMIT_MB` | No | `100` | `hosted` mode: storage for uploaded images and videos per account. |
+| `CLIENT_IP_HEADER` | In `hosted` mode behind a proxy | – | The header your proxy sets to the visitor's address: `Fly-Client-IP` on Fly.io, `X-Real-IP` on Railway, `X-Forwarded-For` behind Caddy. Sign-in and sign-up limits count per address. |
 | `PORT` | No | `4200` | HTTP port. |
 | `DATABASE_PATH` | No | `data/feedbacker.db` | Path of the SQLite file. The folder is made if it does not exist. Uploaded images go into an `uploads` folder next to it. |
 
@@ -212,6 +231,37 @@ attach a persistent disk at `/app/data`.
 4. Run `bun run start` under a process manager (for example a systemd service) so it restarts after a crash or a reboot.
 5. Put a reverse proxy with HTTPS in front of it (see Option A).
 
+### Run the public website (`MODE=hosted`)
+
+The website is the same app with open sign-up. Deploy it with any option above, and set these variables (as secrets
+on Fly.io or Railway, or in `.env` with Docker):
+
+```
+MODE=hosted
+ADMIN_EMAIL=you@example.com
+CLIENT_IP_HEADER=Fly-Client-IP
+```
+
+1. Set `CLIENT_IP_HEADER` for your host (see [Configuration](#configuration)).
+   **Warning:** Without it, every visitor behind the proxy shares one address. Then 5 wrong passwords from anyone lock
+   sign-in for everyone for 15 minutes, and only 5 accounts can be made per hour. Never set a header that your proxy
+   does not overwrite, because visitors can send any value in it.
+2. Deploy, open `https://<your-domain>/admin/signup` and create the account for `ADMIN_EMAIL`.
+3. If the copy was in `single` mode before, its forms move to the `ADMIN_EMAIL` account when that account signs up or
+   signs in.
+
+`ADMIN_USERNAME` and `ADMIN_PASSWORD` are not used in `hosted` mode.
+
+What the website does and does not do:
+
+- **Accounts:** an email and a password (at least 8 characters, stored as an Argon2id hash). Nobody checks that the
+  email is real, and there is no password reset by email. Users change their password in Settings → Account; this signs
+  out their other devices.
+- **Privacy:** each account sees only its own forms, answers and settings. Another account's form looks like a missing
+  form. Settings → Account → **Delete account** removes the account, its forms, answers and uploaded files.
+- **Limits:** 5 new accounts per address per hour, and `UPLOAD_LIMIT_MB` of uploads per account. There is no limit on
+  the number of forms or answers.
+
 ## Design system
 
 All UI comes from the Feedbacker design system: `src/design/tokens.css`, `src/design/bundle.css` and the font files in
@@ -242,11 +292,14 @@ scripts/     dev.ts starts the two dev servers
 - **Rules:** A rule can use only answers to questions that come *earlier* in the form. This prevents loops.
   The same code (`shared/logic.ts`) runs in the browser and on the server. The server drops answers to hidden
   questions and checks that each visible required question has an answer.
-- **Sign-in:** The server compares the username and password from `.env` in constant time. It sets a signed,
-  `HttpOnly`, `SameSite=Strict` cookie for 7 days. After 5 failed attempts from one address, sign-in is locked for
-  15 minutes.
+- **Sign-in:** In `single` mode the server compares the username and password from `.env` in constant time. In
+  `hosted` mode it checks the email and the Argon2id password hash from the `users` table (an unknown email takes as
+  long as a wrong password). Both set a signed, `HttpOnly`, `SameSite=Strict` cookie for 7 days that holds the account
+  id and a version; a password change raises the version and ends older sessions. After 5 failed attempts from one
+  address, sign-in is locked for 15 minutes.
+- **Accounts:** each form has an `owner` (0 is the `single` mode owner). Every owner route checks it.
 - **Share links** have the form `/f/<id>`. The id is 10 random characters (60 bits).
-- **Uploads:** only the owner can upload. The server checks the first bytes of each file, so only real PNG, JPEG,
+- **Uploads:** only signed-in owners can upload. Each file is recorded in the `uploads` table with its account and size. The server checks the first bytes of each file, so only real PNG, JPEG,
   GIF, WebP, MP4 and WebM files are kept (SVG is refused because it can carry scripts). Files get random names under
   `/uploads/`. Videos are served with range requests, so Safari can play them.
 - **Themes:** `shared/themes.ts` holds each theme as two palettes. `src/form/theme.css` turns them into CSS custom
@@ -262,9 +315,12 @@ scripts/     dev.ts starts the two dev servers
 
 - The session secret is stored in the data folder (`session.secret`). Changing `ADMIN_PASSWORD` signs every session out.
 - Public form submissions have no spam protection (no rate limit or captcha).
-- Behind a reverse proxy, the failed-sign-in count uses the proxy's address, so all visitors share one count.
+- Behind a reverse proxy, the failed-sign-in count uses the proxy's address unless `CLIENT_IP_HEADER` is set, so all
+  visitors share one count.
+- Sign-in and sign-up counts live in memory. Run one server only (this is already true, because the data is one SQLite file).
+- `hosted` mode has no email: no address check and no password reset. A user who forgets the password cannot get in.
 - Rules compare option text. If you rename an option, check the rules that use it.
-- Uploaded images stay on disk when you delete the image block or the form.
+- Uploaded images stay on disk when you delete the image block or the form. They go when the account is deleted.
 
 ## Instructions for AI coding assistants
 
@@ -273,7 +329,8 @@ If a user asks you to set up, run or deploy this project, follow these steps in 
 1. Check the Bun version with `bun --version`. If Bun is missing or older than 1.4, tell the user how to install or
    upgrade it (`bun upgrade`). Do not continue on an older Bun.
 2. Run `bun install`.
-3. If `.env` does not exist, copy `.env.example` to `.env`. Ask the user for the owner username and password.
+3. If `.env` does not exist, copy `.env.example` to `.env`. Ask the user which mode they want: `single` (self-hosted,
+   one owner) or `hosted` (public website with sign-up). For `single`, ask for the owner username and password.
    The password must have at least 8 characters. Do not invent a password and do not show it in chat.
    Never commit `.env`. Never put the password in any other file.
 4. Run `bun test` and `bun run typecheck`. Both must pass before you continue.
@@ -282,9 +339,10 @@ If a user asks you to set up, run or deploy this project, follow these steps in 
 6. Deploy: ask the user where to deploy, then follow [Deploy](#deploy). Make sure that:
    - the database folder `/app/data` (Docker) or the `DATABASE_PATH` folder is on persistent storage,
    - HTTPS is in front of the app,
-   - `ADMIN_USERNAME` and `ADMIN_PASSWORD` are set as secrets on the platform, not in the repository.
+   - `ADMIN_USERNAME` and `ADMIN_PASSWORD` (`single` mode) are set as secrets on the platform, not in the repository,
+   - in `hosted` mode, `MODE=hosted`, `ADMIN_EMAIL` and the right `CLIENT_IP_HEADER` are set.
 7. Check the deploy: `GET /api/public/forms/does-not-exist` must return HTTP 404 with JSON, and `/admin` must show
-   the sign-in page.
+   the sign-in page. In `hosted` mode, `GET /api/site` must return `"mode":"hosted"`.
 
 Rules for changes to the code:
 

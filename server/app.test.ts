@@ -106,17 +106,99 @@ test('dev settings: owner only, unknown values fall back to defaults', async () 
 });
 
 test('landing page look: Paper by default, public read, owner-only change', async () => {
-  expect(await (await call('/api/landing')).json()).toEqual({ theme: 'paper' });
+  const landing = async () => (await (await call('/api/site')).json()).landing;
+  expect(await (await call('/api/site')).json()).toEqual({ mode: 'single', landing: 'paper' });
   const login = await call('/api/login', { method: 'POST', body: { username: 'owner', password: 'correct-horse' } });
   const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
   await call('/api/settings', { method: 'PUT', cookie, body: { landing: 'arcade' } });
-  expect(await (await call('/api/landing')).json()).toEqual({ theme: 'arcade' });
+  expect(await landing()).toBe('arcade');
   await call('/api/settings', { method: 'PUT', cookie, body: { landing: 'neon' } }); // unknown: back to Paper
-  expect(await (await call('/api/landing')).json()).toEqual({ theme: 'paper' });
+  expect(await landing()).toBe('paper');
 });
 
 test('a forged session cookie is rejected', async () => {
-  expect((await call('/api/me', { cookie: `feedbacker_session=${Date.now() + 1e9}` })).status).toBe(401);
+  expect((await call('/api/me', { cookie: `feedbacker_session=0.0.${Date.now() + 1e9}` })).status).toBe(401);
+});
+
+test('single mode: no sign-up and no account routes', async () => {
+  expect((await call('/api/signup', { method: 'POST', body: { email: 'a@b.co', password: 'password1' } })).status).toBe(404);
+  const login = await call('/api/login', { method: 'POST', body: { username: 'owner', password: 'correct-horse' } });
+  const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
+  expect(await (await call('/api/me', { cookie })).json()).toEqual({ mode: 'single', admin: true });
+  expect((await call('/api/account', { method: 'DELETE', cookie, body: { password: 'correct-horse' } })).status).toBe(404);
+});
+
+test('hosted mode: sign up, private forms, admin takes over old forms, storage limit, password change, delete account', async () => {
+  const db = openDb(':memory:');
+  // A form made in single mode before the switch (owner 0).
+  db.query("INSERT INTO forms (id, doc, created_at, updated_at) VALUES ('oldform001', '{\"title\":\"Old\",\"sections\":[]}', 1, 1)").run();
+  const dir = join(mkdtempSync(join(tmpdir(), 'feedbacker-')), 'uploads');
+  const h = createApp({ db, secret: 's', uploadDir: dir, mode: 'hosted', adminEmail: 'Boss@Example.com', uploadLimitMb: 0.0001 });
+  const req = (path: string, init: { method?: string; body?: unknown; cookie?: string } = {}) =>
+    h.request(path, { method: init.method ?? 'GET', headers: { 'content-type': 'application/json', ...(init.cookie ? { cookie: init.cookie } : {}) }, body: init.body === undefined ? undefined : JSON.stringify(init.body) });
+  const cookieOf = (r: Response) => r.headers.get('set-cookie')!.split(';')[0]!;
+
+  expect(await (await req('/api/site')).json()).toMatchObject({ mode: 'hosted' });
+  // Bad input, then a new account, then the same email again.
+  const bad = await req('/api/signup', { method: 'POST', body: { email: 'nope', password: 'short' } });
+  expect(bad.status).toBe(400);
+  expect(Object.keys((await bad.json()).errors).sort()).toEqual(['email', 'password']);
+  const a = await req('/api/signup', { method: 'POST', body: { email: 'Ann@Example.com ', password: 'ann-password' } });
+  expect(a.status).toBe(201);
+  const ann = cookieOf(a);
+  expect((await req('/api/signup', { method: 'POST', body: { email: 'ann@example.com', password: 'other-password' } })).status).toBe(409);
+  expect(await (await req('/api/me', { cookie: ann })).json()).toEqual({ mode: 'hosted', email: 'ann@example.com', admin: false });
+  // The single-mode owner login does not exist here.
+  expect((await req('/api/login', { method: 'POST', body: { username: 'owner', password: 'correct-horse' } })).status).toBe(401);
+
+  // Ann's form is private: Bob can neither list, read, change, publish nor delete it.
+  const { id } = await (await req('/api/forms', { method: 'POST', body: { title: 'Ann form' }, cookie: ann })).json();
+  const bob = cookieOf(await req('/api/signup', { method: 'POST', body: { email: 'bob@example.com', password: 'bob-password' } }));
+  expect(await (await req('/api/forms', { cookie: bob })).json()).toEqual([]);
+  expect((await req(`/api/forms/${id}`, { cookie: bob })).status).toBe(404);
+  expect((await req(`/api/forms/${id}`, { method: 'PUT', body: { title: 'x', sections: [] }, cookie: bob })).status).toBe(404);
+  expect((await req(`/api/forms/${id}/publish`, { method: 'POST', cookie: bob })).status).toBe(404);
+  expect((await req(`/api/forms/${id}/responses`, { cookie: bob })).status).toBe(404);
+  expect((await req(`/api/forms/${id}`, { method: 'DELETE', cookie: bob })).status).toBe(404);
+  expect((await (await req('/api/forms', { cookie: ann })).json()).map((f: { id: string }) => f.id)).toEqual([id]);
+  // The old form belongs to nobody yet; only the admin can change the landing page.
+  expect((await req('/api/forms/oldform001', { cookie: ann })).status).toBe(404);
+  await req('/api/settings', { method: 'PUT', cookie: ann, body: { landing: 'arcade' } });
+  expect((await (await req('/api/site')).json()).landing).toBe('paper');
+
+  // The admin (ADMIN_EMAIL, any letter case) takes over the old form at sign-up and sets the landing page.
+  const boss = cookieOf(await req('/api/signup', { method: 'POST', body: { email: 'boss@example.com', password: 'boss-password' } }));
+  expect((await req('/api/forms/oldform001', { cookie: boss })).status).toBe(200);
+  await req('/api/settings', { method: 'PUT', cookie: boss, body: { landing: 'arcade', devTheme: 'ink' } });
+  expect((await (await req('/api/site')).json()).landing).toBe('arcade');
+  expect((await (await req('/api/settings', { cookie: ann })).json()).devTheme).toBe('default'); // settings are per account
+
+  // Storage limit (about 100 bytes here).
+  const upload = (n: number) => { const b = new Uint8Array(n); b.set([0x89, 0x50, 0x4e, 0x47]); const f = new FormData(); f.append('file', new File([b], 'x.png')); return h.request('/api/uploads', { method: 'POST', body: f, headers: { cookie: ann } }); };
+  const up = await upload(60);
+  expect(up.status).toBe(201);
+  expect((await upload(60)).status).toBe(413);
+
+  // Wrong passwords fail; a password change ends Ann's other sessions.
+  expect((await req('/api/login', { method: 'POST', body: { email: 'ann@example.com', password: 'wrong-password' } })).status).toBe(401);
+  const ann2 = cookieOf(await req('/api/login', { method: 'POST', body: { email: 'ANN@example.com', password: 'ann-password' } }));
+  expect((await req('/api/account/password', { method: 'PUT', cookie: ann, body: { current: 'wrong', next: 'new-password' } })).status).toBe(400);
+  const changed = await req('/api/account/password', { method: 'PUT', cookie: ann, body: { current: 'ann-password', next: 'new-password' } });
+  expect(changed.status).toBe(200);
+  expect((await req('/api/me', { cookie: ann2 })).status).toBe(401);
+  const ann3 = cookieOf(changed);
+  expect((await req('/api/me', { cookie: ann3 })).status).toBe(200);
+
+  // Delete the account: forms, answers, files and the account go; the live link stops working.
+  await req(`/api/forms/${id}/publish`, { method: 'POST', cookie: ann3 });
+  expect((await req(`/api/public/forms/${id}`)).status).toBe(200);
+  expect((await req('/api/account', { method: 'DELETE', cookie: ann3, body: { password: 'ann-password' } })).status).toBe(400);
+  expect((await req('/api/account', { method: 'DELETE', cookie: ann3, body: { password: 'new-password' } })).status).toBe(200);
+  expect((await req(`/api/public/forms/${id}`)).status).toBe(404);
+  expect((await h.request((await up.json()).url)).status).toBe(404);
+  expect((await req('/api/me', { cookie: ann3 })).status).toBe(401);
+  expect((await req('/api/login', { method: 'POST', body: { email: 'ann@example.com', password: 'new-password' } })).status).toBe(401);
+  expect(await (await req('/api/forms', { cookie: bob })).json()).toEqual([]);
 });
 
 test('too many failed logins are blocked', async () => {

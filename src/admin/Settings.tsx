@@ -1,6 +1,7 @@
 // Dev-mode settings (Settings card): dev theme, color mode, landing page look and fonts. Only the owner sees dev mode;
 // none of this changes how forms look to visitors.
-import { createSignal, For, Show } from 'solid-js';
+import { createResource, createSignal, For, Show } from 'solid-js';
+import { api, ApiError, SIGNED_OUT } from '../api';
 import { DEV_THEMES, LANDING_THEMES } from '../../shared/devSettings';
 import { FONT_OPTIONS } from '../../shared/fonts';
 import { PAIRINGS } from '../../shared/fonts';
@@ -10,7 +11,11 @@ import { devSettings, devTheme, updateAppearance } from './appearance';
 import { signOut, TopBar } from './FormsList';
 import { Link } from './router';
 
+type Me = { mode: 'single' | 'hosted'; email?: string; admin: boolean };
+
 export default function Settings() {
+  const [me] = createResource(() => api<Me>('/me'));
+  const hosted = () => me()?.mode === 'hosted';
   const [error, setError] = createSignal('');
   const [saved, setSaved] = createSignal(false);
   const s = devSettings;
@@ -71,6 +76,7 @@ export default function Settings() {
                   options={[{ value: 'auto', label: 'Auto', icon: 'monitor' }, { value: 'light', label: 'Light', icon: 'sun' }, { value: 'dark', label: 'Dark', icon: 'moon' }]} />
               </div>
             </div>
+            <Show when={me()?.admin}>
             <div class="fb-set-row">
               <div><h3>Landing page</h3><p>The look of the public page at "/". Visitors see it; your forms keep their own themes.</p></div>
               <div style={{ display: 'flex', 'flex-direction': 'column', gap: '8px', 'align-items': 'flex-start' }}>
@@ -79,6 +85,7 @@ export default function Settings() {
                 <span class="fb-help">{LANDING_THEMES.find((t) => t.id === s().landing)?.idea} · <a class="fb-link" href="/" target="_blank" rel="noopener">Open the landing page</a></span>
               </div>
             </div>
+            </Show>
           </section>
 
           <h2 class="fb-h" id="fonts" tabIndex={-1} style={{ margin: '28px 0 12px' }}>Fonts</h2>
@@ -112,13 +119,92 @@ export default function Settings() {
           </section>
           <h2 class="fb-h" id="account" tabIndex={-1} style={{ margin: '28px 0 12px' }}>Account</h2>
           <section class="fb-card" style={{ padding: '4px 24px' }}>
+            <Show when={hosted()}>
+              <div class="fb-set-row">
+                <div><h3>Email</h3><p>You sign in with this address.</p></div>
+                <div><b>{me()?.email}</b></div>
+              </div>
+              <ChangePassword />
+            </Show>
             <div class="fb-set-row">
               <div><h3>Sign out</h3><p>Ends your session on this device. Your forms keep collecting answers.</p></div>
               <div><button type="button" class="fb-btn fb-btn--danger" onClick={signOut}>Sign out</button></div>
             </div>
+            <Show when={hosted()}><DeleteAccount /></Show>
           </section>
         </main>
       </div>
+    </div>
+  );
+}
+
+/** Hosted mode: change the password. Every other device is signed out; this one stays signed in. */
+function ChangePassword() {
+  const [msg, setMsg] = createSignal<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = createSignal(false);
+  async function submit(e: SubmitEvent) {
+    e.preventDefault();
+    const form = e.currentTarget as HTMLFormElement;
+    const f = new FormData(form);
+    setBusy(true);
+    try {
+      await api('/account/password', 'PUT', { current: f.get('current'), next: f.get('next') });
+      form.reset();
+      setMsg({ ok: true, text: 'Password changed. Other devices are signed out.' });
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : 'The password did not change.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form class="fb-set-row" onSubmit={submit} novalidate>
+      <div><h3>Password</h3><p>At least 8 characters. Changing it signs out your other devices.</p></div>
+      <div style={{ display: 'flex', 'flex-direction': 'column', gap: '10px', 'max-width': '340px' }}>
+        <div class="fb-field"><label class="fb-label" for="pw-now">Current password</label>
+          <input class="fb-input" id="pw-now" name="current" type="password" autocomplete="current-password" required /></div>
+        <div class="fb-field"><label class="fb-label" for="pw-new">New password</label>
+          <input class="fb-input" id="pw-new" name="next" type="password" autocomplete="new-password" minLength={8} required /></div>
+        <div><button class="fb-btn fb-btn--secondary" classList={{ 'is-loading': busy() }} aria-busy={busy()}>Change password</button></div>
+        <Show when={msg()}>{(m) => <p class={m().ok ? 'fb-help' : 'fb-err'} role="status"><Icon name={m().ok ? 'check' : 'alert'} size="sm" />{m().text}</p>}</Show>
+      </div>
+    </form>
+  );
+}
+
+/** Hosted mode: delete the account, with every form, answer and uploaded file. Asks for the password first. */
+function DeleteAccount() {
+  const [open, setOpen] = createSignal(false);
+  const [error, setError] = createSignal('');
+  const [busy, setBusy] = createSignal(false);
+  async function submit(e: SubmitEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await api('/account', 'DELETE', { password: new FormData(e.currentTarget as HTMLFormElement).get('password') });
+      location.assign('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The account was not deleted.');
+      if (err instanceof ApiError && err.status === 401) window.dispatchEvent(new Event(SIGNED_OUT));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div class="fb-set-row">
+      <div><h3>Delete account</h3><p>Deletes your account, every form, every answer and every uploaded file. You cannot undo this.</p></div>
+      <Show when={open()} fallback={<div><button type="button" class="fb-btn fb-btn--danger-ghost" onClick={() => setOpen(true)}><Icon name="trash" size="sm" />Delete my account…</button></div>}>
+        <form onSubmit={submit} novalidate style={{ display: 'flex', 'flex-direction': 'column', gap: '10px', 'max-width': '340px' }}>
+          <div class="fb-field"><label class="fb-label" for="del-pw">Type your password to confirm</label>
+            <input class="fb-input" id="del-pw" name="password" type="password" autocomplete="current-password" required autofocus aria-invalid={error() ? true : undefined} /></div>
+          <Show when={error()}><p class="fb-err" role="alert"><Icon name="alert" size="sm" />{error()}</p></Show>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button class="fb-btn fb-btn--danger" classList={{ 'is-loading': busy() }} aria-busy={busy()}>Delete everything</button>
+            <button type="button" class="fb-btn fb-btn--secondary" onClick={() => { setOpen(false); setError(''); }}>Cancel</button>
+          </div>
+        </form>
+      </Show>
     </div>
   );
 }

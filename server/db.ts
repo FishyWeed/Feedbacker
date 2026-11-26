@@ -24,6 +24,21 @@ export function openDb(path: string): Database {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    -- Hosted mode accounts. \`ver\` goes up when the password changes, which ends every older session.
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      pass TEXT NOT NULL,
+      ver INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+    -- Uploaded files per account, for the storage limit and to remove them with the account.
+    CREATE TABLE IF NOT EXISTS uploads (
+      name TEXT PRIMARY KEY,
+      owner INTEGER NOT NULL,
+      size INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
   `);
   // Drafts and publishing: `doc` is the saved draft, `published` is what the live link shows.
   const cols = db.query<{ name: string }, []>('PRAGMA table_info(forms)').all().map((c) => c.name);
@@ -32,5 +47,8 @@ export function openDb(path: string): Database {
     // Forms from before publishing existed were live already; keep their links working.
     db.exec('UPDATE forms SET published = doc, published_at = updated_at');
   }
+  // Accounts: `owner` is the user id; 0 is the single owner from .env (self-hosted mode, and all older forms).
+  if (!cols.includes('owner')) db.exec('ALTER TABLE forms ADD COLUMN owner INTEGER NOT NULL DEFAULT 0');
+  db.exec('CREATE INDEX IF NOT EXISTS forms_by_owner ON forms(owner, updated_at)');
   return db;
 }
