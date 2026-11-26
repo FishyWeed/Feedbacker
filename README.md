@@ -14,8 +14,10 @@ You build a form in a drag-and-drop editor, share a link or a QR code, and read 
 - **Blueprint view** (editor tab): the form as a circuit on a free board. Pages are nodes joined by flow lines; a
   conditional page or question gets a dashed line labeled with its rule, plus an "Otherwise" skip. Click the dot beside
   a question, pick an answer and pull the wire to a later question or page to set a condition. The dots on a page's
-  sides add a page or connect pages (the page you connect to comes next). Drag nodes and line middles to arrange them;
-  right-drag or scroll to pan. Save draft keeps the layout.
+  sides add a page or connect pages (the page you connect to comes next). Drag nodes and line labels to arrange them,
+  resize a page from its corner, and drag the bars between its blocks to space them apart. Right-drag or scroll to pan;
+  Ctrl+wheel, a pinch or Ctrl +/-/0 zoom the board. The side panel can be hidden or docked left, right or bottom.
+  Save draft keeps the layout.
 - **Conditional logic:** A section or block can show only if earlier answers match rules
   (for example "Show if *Did you like it?* is *No*").
 - **Images:** upload a PNG, JPEG, GIF or WebP file (up to 5 MB) from your computer, or use an image URL.

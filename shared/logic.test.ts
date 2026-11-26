@@ -97,3 +97,13 @@ test('withCondition starts or extends a rule, without duplicates; canUseQuestion
   expect(canUseQuestion(doc, 'likes', 'likes')).toBe(false); // itself
   expect(canUseQuestion(doc, 's1', 'likes')).toBe(false); // its own page
 });
+
+test('parseFormDoc keeps blueprint sizes and line bends, clamped, and drops bad ones', () => {
+  const doc = (section: object, block: object) => parseFormDoc({ title: 't', sections: [{ id: 's1', rows: [{ id: 'r1', columns: [{ id: 'c1', blocks: [{ id: 'b1', kind: 'short_text', ...block }] }] }], ...section }] })!;
+  expect(doc({ size: { w: 50, h: 9000 } }, {}).sections[0]!.size).toEqual({ w: 200, h: 4000 });
+  expect(doc({ size: { w: 'x', h: 1 } }, {}).sections[0]!.size).toBeUndefined();
+  expect(doc({ spacing: 999.6 }, {}).sections[0]!.spacing).toBe(200);
+  expect(doc({ spacing: 'wide' }, {}).sections[0]!.spacing).toBeUndefined();
+  const b = doc({}, { bends: { q1: { x: 10.4, y: -20 }, 'bad id!': { x: 1, y: 1 }, q2: 'nope' } }).sections[0]!.rows[0]!.columns[0]!.blocks[0]!;
+  expect(b.bends).toEqual({ q1: { x: 10, y: -20 } });
+});

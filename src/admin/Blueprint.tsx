@@ -2,16 +2,21 @@
 // order, from Start to the thank-you page. A page or question with a condition gets a dashed line labeled with its
 // rule, and an "Otherwise" line shows the skip.
 //
-// - Board: no scrollbars. Hold the right (or middle) mouse button to pan, or use the wheel. "Center" brings it back.
-// - Nodes: drag by the header, or arrow keys. Lines: drag the middle (label or "+") to bend; double-click to straighten.
+// - Board: no scrollbars. Hold the right (or middle) mouse button to pan, or use the wheel. Ctrl+wheel, a pinch,
+//   Ctrl +/-/0 or the toolbar zoom. "Center" brings the pages back.
+// - Nodes: drag by the header, or arrow keys; resize from the corner. Lines (page lines and condition lines between
+//   elements): drag the middle (label or "+") to bend; double-click to straighten.
+// - The side panel can be hidden and docked left, right or bottom (remembered in this browser).
 // - Question ports: click the dot beside a question, pick an answer, then pull the wire to a later question or page:
 //   that target shows only for that answer. Page ports: add a page before or after, or wire to another page to make
 //   it come next.
 // Positions and bends are part of the draft, so Save draft keeps them; every change is one undo step.
 import { createEffect, createMemo, createSignal, For, Show, onCleanup, onMount } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { canUseQuestion, ruleText, withCondition } from '../../shared/logic';
 import { isQuestion, KIND_LABELS, optionsOf, type Block, type Condition, type Section } from '../../shared/schema';
 import { Icon, KIND_ICON } from '../ui/icons';
+import { Seg } from '../ui/kit';
 import { locate, useEditor } from './editorStore';
 import { RuleEditor } from './Inspector';
 
@@ -19,6 +24,9 @@ const NODE_W = 280;
 const GAP_X = 200; // room for a condition label above the line
 const PORT_Y = 26; // flow lines meet a node at the middle of its header
 const MOVE_PX = 20; // arrow-key step (Shift: 3 steps)
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 2;
+const MIN_W = 200;
 
 type Pt = { x: number; y: number };
 type Edge = { key: string; d: string; kind: 'flow' | 'cond' | 'bypass'; mid: Pt; target?: Section; page?: number };
@@ -52,6 +60,10 @@ function choicesFor(b: Block): { label: string; cond: Condition }[] {
 export default function Blueprint() {
   const ed = useEditor();
   const [pan, setPan] = createSignal<Pt>({ x: 0, y: 0 });
+  const [zoom, setZoom] = createSignal(1);
+  const [sizeDrag, setSizeDrag] = createSignal<{ id: string; w: number; h: number } | null>(null);
+  const [elemBend, setElemBend] = createSignal<{ key: string; x: number; y: number } | null>(null);
+  const [gapDrag, setGapDrag] = createSignal<{ id: string; v: number } | null>(null);
   const [drag, setDrag] = createSignal<{ id: string; x: number; y: number } | null>(null);
   const [bendDrag, setBendDrag] = createSignal<{ id: string; x: number; y: number } | null>(null);
   const [menu, setMenu] = createSignal<Menu | null>(null);
@@ -59,7 +71,34 @@ export default function Blueprint() {
   const [cursor, setCursor] = createSignal<Pt>({ x: 0, y: 0 });
   const [note, setNote] = createSignal('');
   let stage!: HTMLDivElement;
-  const toWorld = (cx: number, cy: number): Pt => { const r = stage.getBoundingClientRect(); return { x: cx - r.left - pan().x, y: cy - r.top - pan().y }; };
+  /** Screen point → board point (undoes the pan and the zoom). */
+  const toWorld = (cx: number, cy: number): Pt => { const r = stage.getBoundingClientRect(); return { x: (cx - r.left - pan().x) / zoom(), y: (cy - r.top - pan().y) / zoom() }; };
+  /** Board point → point on the stage (for things drawn at screen size: menus, the wire tag). */
+  const toStage = (p: Pt): Pt => ({ x: p.x * zoom() + pan().x, y: p.y * zoom() + pan().y });
+
+  /** Follows a drag: `onMove` gets the movement in board units once it passes 3px; `onEnd(moved)` on release. */
+  function dragBy(e: PointerEvent, onMove: (dx: number, dy: number) => void, onEnd: (moved: boolean) => void) {
+    const sx = e.clientX;
+    const sy = e.clientY;
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      const dx = ev.clientX - sx;
+      const dy = ev.clientY - sy;
+      if (!moved && Math.hypot(dx, dy) < 3) return;
+      moved = true;
+      onMove(dx / zoom(), dy / zoom());
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); onEnd(moved); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+  /** The click that follows a drag must not also select or open something. The browser sends that click (if any) right
+   * after the release, so the guard ends with this task; otherwise it would swallow a later, unrelated click. */
+  function eatNextClick() {
+    const eat = (ev: Event) => ev.stopPropagation();
+    window.addEventListener('click', eat, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 0);
+  }
   const centerOf = (el: Element): Pt => { const r = el.getBoundingClientRect(); return toWorld(r.left + r.width / 2, r.top + r.height / 2); };
 
   // Node heights, measured, so an "Otherwise" line can pass below the nodes it skips.
@@ -72,19 +111,25 @@ export default function Blueprint() {
   onCleanup(() => sizes.disconnect());
   const measure = (el: HTMLElement) => sizes.observe(el);
 
-  const auto = (i: number): Pt => ({ x: 160 + i * (NODE_W + GAP_X), y: 90 });
+  const widthOf = (s: Section) => { const d = sizeDrag(); return d?.id === s.id ? d.w : s.size?.w ?? NODE_W; };
+  const DEFAULT_GAP = 10;
+  const spacingOf = (s: Section) => { const d = gapDrag(); return d?.id === s.id ? d.v : s.spacing ?? DEFAULT_GAP; };
+  const minHeightOf = (s: Section) => { const d = sizeDrag(); return d?.id === s.id ? d.h : s.size?.h ?? 0; };
+  const autoXs = createMemo(() => { let x = 160; return ed.doc.sections.map((s) => { const at = x; x += widthOf(s) + GAP_X; return at; }); });
+  const auto = (i: number): Pt => ({ x: autoXs()[i] ?? 160, y: 90 });
   const posOf = (s: Section, i: number): Pt => { const d = drag(); return d?.id === s.id ? d : s.pos ?? auto(i); };
   const bendOf = (s: Section): Pt => { const b = bendDrag(); return b?.id === s.id ? b : s.bend ?? { x: 0, y: 0 }; };
   const positions = createMemo(() => ed.doc.sections.map(posOf));
   const last = () => positions()[positions().length - 1] ?? { x: 160, y: 90 };
   const start = (): Pt => { const p = positions()[0] ?? auto(0); return { x: p.x - 120, y: p.y + PORT_Y }; };
-  const end = (): Pt => ({ x: last().x + NODE_W + GAP_X / 2 + 20, y: last().y + PORT_Y });
+  const lastWidth = () => { const secs = ed.doc.sections; return secs.length ? widthOf(secs[secs.length - 1]!) : NODE_W; };
+  const end = (): Pt => ({ x: last().x + lastWidth() + GAP_X / 2 + 20, y: last().y + PORT_Y });
 
   const edges = createMemo<Edge[]>(() => {
     const secs = ed.doc.sections;
     const ps = positions();
     // Lines leave from the outer edge of a page's right dot and arrive at the outer edge of the next page's left dot.
-    const outOf = (i: number): Pt => (i < 0 ? { x: start().x + 64, y: start().y } : { x: ps[i]!.x + NODE_W + 8, y: ps[i]!.y + PORT_Y });
+    const outOf = (i: number): Pt => (i < 0 ? { x: start().x + 64, y: start().y } : { x: ps[i]!.x + widthOf(secs[i]!) + 8, y: ps[i]!.y + PORT_Y });
     const into = (i: number): Pt => (i >= secs.length ? { x: end().x, y: end().y } : { x: ps[i]!.x - 8, y: ps[i]!.y + PORT_Y });
     const bottom = (i: number) => (secs[i] ? ps[i]!.y + (heights()[secs[i]!.id] ?? 200) : 0);
     const out: Edge[] = [];
@@ -128,40 +173,85 @@ export default function Blueprint() {
     const dy = r.top < s.top + m ? s.top + m - r.top : r.bottom > s.bottom - m ? s.bottom - m - r.bottom : 0;
     if (dx || dy) setPan((p) => ({ x: p.x + dx, y: p.y + dy }));
   };
-  const wheel = (e: WheelEvent) => { e.preventDefault(); setPan((p) => ({ x: p.x - (e.shiftKey ? e.deltaY : e.deltaX), y: p.y - (e.shiftKey ? 0 : e.deltaY) })); };
+  /** Zoom to `z`, keeping the board point under (sx, sy) (stage pixels) where it is. */
+  function zoomAt(z: number, sx = stage.clientWidth / 2, sy = stage.clientHeight / 2) {
+    const z0 = zoom();
+    const z1 = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100));
+    if (z1 === z0) return;
+    setPan((p) => ({ x: sx - ((sx - p.x) * z1) / z0, y: sy - ((sy - p.y) * z1) / z0 }));
+    setZoom(z1);
+  }
+  // Wheel pans; Ctrl/Cmd+wheel (and a trackpad pinch, which the browser sends as Ctrl+wheel) zooms at the pointer.
+  const wheel = (e: WheelEvent) => {
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey) {
+      const r = stage.getBoundingClientRect();
+      return zoomAt(zoom() * Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
+    }
+    setPan((p) => ({ x: p.x - (e.shiftKey ? e.deltaY : e.deltaX), y: p.y - (e.shiftKey ? 0 : e.deltaY) }));
+  };
   /** Center: fit the middle of all pages into view. */
   function center() {
     const ps = positions();
     const xs = ps.map((p) => p.x);
     const ys = ps.map((p) => p.y);
-    const midX = (Math.min(...xs, 0) - 120 + Math.max(...xs, 0) + NODE_W + 160) / 2;
-    setPan({ x: Math.round(stage.clientWidth / 2 - midX), y: Math.round(80 - Math.min(...ys, 90) + 40) });
+    const midX = (Math.min(...xs, 0) - 120 + Math.max(...xs, 0) + lastWidth() + 160) / 2;
+    setPan({ x: Math.round(stage.clientWidth / 2 - midX * zoom()), y: Math.round(80 - Math.min(...ys, 90) * zoom() + 40) });
   }
 
   // --- Moving nodes: drag the header (one undo step on release), or arrow keys. ---
   function pressNode(s: Section, i: number, e: PointerEvent) {
     if (e.button !== 0 || wire() || (e.target as Element).closest('button')) return;
     const from = posOf(s, i);
-    const sx = e.clientX;
-    const sy = e.clientY;
-    let moved = false;
-    const move = (ev: PointerEvent) => {
-      const dx = ev.clientX - sx;
-      const dy = ev.clientY - sy;
-      if (!moved && Math.hypot(dx, dy) < 3) return;
-      moved = true;
-      setDrag({ id: s.id, x: from.x + dx, y: from.y + dy });
-    };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
+    dragBy(e, (dx, dy) => setDrag({ id: s.id, x: from.x + dx, y: from.y + dy }), (moved) => {
       const d = drag();
       if (moved && d) ed.actions.updateSection(s.id, { pos: { x: Math.round(d.x), y: Math.round(d.y) } });
       setDrag(null);
       if (!moved) ed.select(s.id);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+    });
+  }
+
+  // --- Resizing a page: drag its corner (width and minimum height), arrow keys on the corner, double-click resets. ---
+  function pressResize(s: Section, e: PointerEvent) {
+    if (e.button !== 0 || wire()) return;
+    e.stopPropagation();
+    const w0 = widthOf(s);
+    const h0 = heights()[s.id] ?? 200;
+    dragBy(e, (dx, dy) => setSizeDrag({ id: s.id, w: Math.max(MIN_W, w0 + dx), h: Math.max(0, h0 + dy) }), (moved) => {
+      const d = sizeDrag();
+      if (moved && d) { ed.actions.updateSection(s.id, { size: { w: Math.round(d.w), h: Math.round(d.h) } }); eatNextClick(); }
+      setSizeDrag(null);
+    });
+  }
+  // --- Spacing inside a page: drag a handle between rows (down) or columns (right); arrow keys; double-click resets. ---
+  function pressGap(s: Section, axis: 'x' | 'y', e: PointerEvent) {
+    if (e.button !== 0 || wire()) return;
+    e.stopPropagation();
+    const v0 = spacingOf(s);
+    // A gap is shared by two neighbours, so the pointer moves it half as fast as it opens: double the movement.
+    dragBy(e, (dx, dy) => setGapDrag({ id: s.id, v: Math.max(0, Math.min(200, v0 + 2 * (axis === 'x' ? dx : dy))) }), (moved) => {
+      const d = gapDrag();
+      if (moved && d) { ed.actions.updateSection(s.id, { spacing: Math.round(d.v) }); eatNextClick(); }
+      setGapDrag(null);
+    });
+  }
+  function keyGap(s: Section, e: KeyboardEvent) {
+    const a = ARROWS[e.key];
+    if (!a) return;
+    e.preventDefault();
+    const step = (e.shiftKey ? 3 : 1) * 4 * (a.x + a.y);
+    ed.actions.updateSection(s.id, { spacing: Math.max(0, Math.min(200, spacingOf(s) + step)) });
+  }
+  const gapLabel = (s: Section) => `Space between blocks: ${spacingOf(s)} pixels. Drag or use the arrow keys; double-click resets.`;
+
+  function keyResize(s: Section, e: KeyboardEvent) {
+    const a = ARROWS[e.key];
+    if (!a) return;
+    e.preventDefault();
+    const step = e.shiftKey ? MOVE_PX * 3 : MOVE_PX;
+    const w = Math.max(MIN_W, widthOf(s) + a.x * step);
+    const h = Math.max(0, (s.size?.h ?? heights()[s.id] ?? 200) + a.y * step);
+    ed.actions.updateSection(s.id, { size: { w, h } });
   }
   const ARROWS: Record<string, Pt> = { ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 } };
   function keyNode(s: Section, i: number, e: KeyboardEvent) {
@@ -178,31 +268,38 @@ export default function Blueprint() {
   function pressBend(t: Section, e: PointerEvent) {
     if (e.button !== 0 || wire()) return;
     const from = bendOf(t);
-    const sx = e.clientX;
-    const sy = e.clientY;
-    let moved = false;
-    const move = (ev: PointerEvent) => {
-      const dx = ev.clientX - sx;
-      const dy = ev.clientY - sy;
-      if (!moved && Math.hypot(dx, dy) < 3) return;
-      moved = true;
-      setBendDrag({ id: t.id, x: from.x + dx, y: from.y + dy });
-    };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
+    dragBy(e, (dx, dy) => setBendDrag({ id: t.id, x: from.x + dx, y: from.y + dy }), (moved) => {
       const b = bendDrag();
-      if (moved && b) {
-        ed.actions.updateSection(t.id, { bend: { x: Math.round(b.x), y: Math.round(b.y) } });
-        // The click that follows a bend must not also open the condition.
-        window.addEventListener('click', (ev) => ev.stopPropagation(), { capture: true, once: true });
-      }
+      if (moved && b) { ed.actions.updateSection(t.id, { bend: { x: Math.round(b.x), y: Math.round(b.y) } }); eatNextClick(); }
       setBendDrag(null);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+    });
   }
   const straighten = (t: Section) => ed.actions.updateSection(t.id, { bend: undefined });
+
+  // --- Moving a condition between elements: drag its label; the line bends with it. Saved on the block, per question. ---
+  const elemBendOf = (target: Block, q: string): Pt => { const d = elemBend(); return d?.key === `${target.id}|${q}` ? d : target.bends?.[q] ?? { x: 0, y: 0 }; };
+  function pressElemBend(targetId: string, q: string, e: PointerEvent) {
+    if (e.button !== 0 || wire()) return;
+    const b = blockById(targetId);
+    if (!b) return;
+    const from = elemBendOf(b, q);
+    dragBy(e, (dx, dy) => setElemBend({ key: `${targetId}|${q}`, x: from.x + dx, y: from.y + dy }), (moved) => {
+      const d = elemBend();
+      if (moved && d) {
+        const bends = { ...structuredClone(unwrap(b.bends) ?? {}), [q]: { x: Math.round(d.x), y: Math.round(d.y) } };
+        ed.actions.updateBlock(targetId, { bends });
+        eatNextClick();
+      }
+      setElemBend(null);
+    });
+  }
+  function straightenElem(targetId: string, q: string) {
+    const b = blockById(targetId);
+    if (!b?.bends?.[q]) return;
+    const bends = structuredClone(unwrap(b.bends));
+    delete bends[q];
+    ed.actions.updateBlock(targetId, { bends: Object.keys(bends).length ? bends : undefined });
+  }
 
   // --- Ports and wires ---
   const blockById = (id: string) => locate(ed.doc, id)?.block;
@@ -271,6 +368,10 @@ export default function Blueprint() {
     if (!(e.ctrlKey || e.metaKey) || (e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) return;
     const k = e.key.toLowerCase();
     if (k === 'z' || k === 'y') { e.preventDefault(); if (k === 'y' || e.shiftKey) ed.history.redo(); else ed.history.undo(); }
+    // Ctrl +/-/0 zoom the board, not the whole page.
+    if (k === '=' || k === '+') { e.preventDefault(); zoomAt(zoom() * 1.2); }
+    if (k === '-' || k === '_') { e.preventDefault(); zoomAt(zoom() / 1.2); }
+    if (k === '0') { e.preventDefault(); zoomAt(1); }
   };
   onMount(() => {
     window.addEventListener('keydown', onKey);
@@ -287,7 +388,7 @@ export default function Blueprint() {
     setMenu(null);
     const i = sectionIndex(sectionId);
     const p = positions()[i]!;
-    const dx = (NODE_W + GAP_X) * (where === 'after' ? 1 : -1);
+    const dx = where === 'after' ? widthOf(ed.doc.sections[i]!) + GAP_X : -(NODE_W + GAP_X);
     ed.actions.addSectionAt(where === 'after' ? i + 1 : i, { x: p.x + dx, y: p.y });
     setNote(`New page added ${where} page ${where === 'after' ? i + 1 : i + 2}.`);
   }
@@ -295,12 +396,9 @@ export default function Blueprint() {
   /** Where a port menu opens: right of the port, or left when there is no room; always inside the visible board. */
   const MENU_W = 236;
   const menuPos = (m: Menu): Pt => {
-    const p = pan();
-    const viewL = -p.x + 8;
-    const viewR = -p.x + stage.clientWidth - 8;
-    const x = m.at.x + 14 + MENU_W <= viewR ? m.at.x + 14 : m.at.x - 14 - MENU_W;
-    const y = Math.min(m.at.y - 10, -p.y + stage.clientHeight - 260);
-    return { x: Math.max(viewL, x), y: Math.max(-p.y + 8, y) };
+    const a = toStage(m.at);
+    const x = a.x + 14 + MENU_W <= stage.clientWidth - 8 ? a.x + 14 : a.x - 14 - MENU_W;
+    return { x: Math.max(8, x), y: Math.max(8, Math.min(a.y - 10, stage.clientHeight - 260)) };
   };
 
   // --- Lines between elements: from a question's dot to each element whose rule uses it. Blocks size themselves, so
@@ -315,7 +413,7 @@ export default function Blueprint() {
     }
     setChips(out);
   }
-  createEffect(() => { positions(); heights(); layoutKey(); queueMicrotask(measureChips); });
+  createEffect(() => { positions(); heights(); layoutKey(); ed.doc.sections.map(widthOf); ed.doc.sections.map(spacingOf); queueMicrotask(measureChips); });
   const SHORT: Record<string, (v: string) => string> = {
     equals: (v) => `"${v}"`, not_equals: (v) => `not "${v}"`, contains: (v) => `has "${v}"`, gt: (v) => `> ${v}`, lt: (v) => `< ${v}`,
     answered: () => 'answered', not_answered: () => 'not answered',
@@ -329,22 +427,31 @@ export default function Blueprint() {
         const a = c[cond.q];
         const t = c[b.id];
         if (!a || !t) continue;
-        const k = curve({ x: a.r.x - 13, y: a.r.y }, { x: t.l.x - 2, y: t.l.y });
+        const k = curve({ x: a.r.x - 13, y: a.r.y }, { x: t.l.x - 2, y: t.l.y }, 0, elemBendOf(b, cond.q));
         out.push({ key: `${b.id}:${i}`, ...k, source: cond.q, target: b.id, text: SHORT[cond.op]!(String(cond.value ?? '')), title: ruleText({ match: 'all', conditions: [cond] }, ed.doc) });
       }
     }
     return out;
   });
 
+  // Side panel: dock (left, right, bottom) and shown or hidden, kept per browser.
+  type Dock = 'left' | 'right' | 'bottom';
+  const readPanel = (): { dock: Dock; open: boolean } => {
+    try { const v = JSON.parse(localStorage.getItem('fb-bpv-panel') ?? 'null'); if (v && ['left', 'right', 'bottom'].includes(v.dock)) return { dock: v.dock, open: v.open !== false }; } catch { /* default */ }
+    return { dock: 'right', open: true };
+  };
+  const [panel, setPanelState] = createSignal(readPanel());
+  const setPanel = (v: { dock: Dock; open: boolean }) => { setPanelState(v); try { localStorage.setItem('fb-bpv-panel', JSON.stringify(v)); } catch { /* private mode */ } };
+
   const label = (b: Block) => b.label?.trim() || KIND_LABELS[b.kind];
   const sel = () => ed.selected();
   const wirePath = () => { const w = wire(); return w ? curve(w.at, cursor()).d : ''; };
 
   return (
-    <div class="fb-bpv">
-      <div ref={stage} class="fb-bpv-stage" classList={{ 'is-wiring': !!wire() }} style={{ 'background-position': `${pan().x}px ${pan().y}px` }} onPointerDown={pressStage} onWheel={wheel} onFocusIn={showFocused}
+    <div class="fb-bpv" data-dock={panel().dock} classList={{ 'no-panel': !panel().open }}>
+      <div ref={stage} class="fb-bpv-stage" classList={{ 'is-wiring': !!wire() }} style={{ 'background-position': `${pan().x}px ${pan().y}px`, 'background-size': `${20 * zoom()}px ${20 * zoom()}px` }} onPointerDown={pressStage} onWheel={wheel} onFocusIn={showFocused}
         onContextMenu={(e) => e.preventDefault()} onClick={(e) => (e.target === e.currentTarget || (e.target as Element).classList.contains('fb-bpv-world')) && !wire() && ed.select(null)}>
-        <div class="fb-bpv-world" style={{ transform: `translate(${pan().x}px, ${pan().y}px)` }}>
+        <div class="fb-bpv-world" style={{ transform: `translate(${pan().x}px, ${pan().y}px) scale(${zoom()})` }}>
           <svg class="fb-bpv-lines" width="1" height="1" aria-hidden="true">
             <defs>
               <For each={['flow', 'cond', 'bypass']}>
@@ -393,7 +500,7 @@ export default function Blueprint() {
             {(s, i) => (
               <section ref={measure} data-bpv-section={s.id} class="fb-bpv-node"
                 classList={{ 'is-selected': sel() === s.id, 'is-dragging': drag()?.id === s.id, 'is-cond': !!s.showIf, 'is-target': canTarget(s.id, true) }}
-                style={{ left: `${posOf(s, i()).x}px`, top: `${posOf(s, i()).y}px`, width: `${NODE_W}px` }} aria-label={`Page ${i() + 1}`}>
+                style={{ left: `${posOf(s, i()).x}px`, top: `${posOf(s, i()).y}px`, width: `${widthOf(s)}px`, 'min-height': `${minHeightOf(s)}px` }} aria-label={`Page ${i() + 1}`}>
                 <button type="button" class="fb-bpv-port is-in" aria-label={`Page ${i() + 1}: add a page before it`} title="Add a page before"
                   onClick={(ev) => { ev.stopPropagation(); openMenu({ kind: 'in', sectionId: s.id, at: centerOf(ev.currentTarget) }); }} />
                 <button type="button" class="fb-bpv-port is-out" aria-label={`Page ${i() + 1}: add a page after it, or connect it to another page`} title="Add a page after, or connect to a page"
@@ -407,14 +514,22 @@ export default function Blueprint() {
                   <Show when={s.showIf}><span class="fb-badge fb-badge--cond"><Icon name="branch" />If</span></Show>
                 </header>
                 {/* The internal circuit: down through each row, across each row's columns. */}
-                <div class="fb-bpv-flow">
+                <div class="fb-bpv-flow" style={{ '--gap': `${spacingOf(s)}px` }}>
                   <Show when={s.rows.some((r) => r.columns.some((c) => c.blocks.length))} fallback={<p class="fb-bpv-empty">No blocks yet</p>}>
                     <For each={s.rows}>
-                      {(r) => (
+                      {(r, ri) => (
                         <div class="fb-bpv-row" style={{ '--n': r.columns.length }}>
+                          <Show when={ri() < s.rows.length - 1}>
+                            <span class="fb-bpv-gap is-row" role="separator" aria-orientation="horizontal" tabIndex={0} aria-label={gapLabel(s)} title="Drag to space the blocks apart"
+                              onPointerDown={(e) => pressGap(s, 'y', e)} onKeyDown={(e) => keyGap(s, e)} onDblClick={() => ed.actions.updateSection(s.id, { spacing: undefined })} />
+                          </Show>
                           <For each={r.columns}>
-                            {(c) => (
+                            {(c, ci) => (
                               <div class="fb-bpv-col">
+                                <Show when={ci() < r.columns.length - 1}>
+                                  <span class="fb-bpv-gap is-col" role="separator" aria-orientation="vertical" tabIndex={0} aria-label={gapLabel(s)} title="Drag to space the blocks apart"
+                                    onPointerDown={(e) => pressGap(s, 'x', e)} onKeyDown={(e) => keyGap(s, e)} onDblClick={() => ed.actions.updateSection(s.id, { spacing: undefined })} />
+                                </Show>
                                 <For each={c.blocks}>
                                   {(b) => (
                                     <div class="fb-bpv-elw">
@@ -439,6 +554,9 @@ export default function Blueprint() {
                     </For>
                   </Show>
                 </div>
+                <button type="button" class="fb-bpv-resize" aria-label={`Resize page ${i() + 1}. Arrow keys change its size; double-click resets it.`}
+                  title="Drag to resize · Double-click to reset" onPointerDown={(e) => pressResize(s, e)} onKeyDown={(e) => keyResize(s, e)}
+                  onDblClick={() => ed.actions.updateSection(s.id, { size: undefined })} />
               </section>
             )}
           </For>
@@ -455,63 +573,79 @@ export default function Blueprint() {
           <For each={elementEdges()}>
             {(e) => (
               <button type="button" class="fb-bpv-elabel" classList={{ 'is-on': sel() === e.target || sel() === e.source }}
-                style={{ left: `${e.mid.x}px`, top: `${e.mid.y}px` }} title={`${e.title}. Click to change.`} onClick={() => ed.select(e.target)}>
+                style={{ left: `${e.mid.x}px`, top: `${e.mid.y}px` }} title={`${e.title}. Click to change · Drag to move · Double-click to straighten`}
+                onPointerDown={(ev) => pressElemBend(e.target, e.source, ev)} onDblClick={() => straightenElem(e.target, e.source)} onClick={() => ed.select(e.target)}>
                 {e.text}
               </button>
             )}
           </For>
 
-          {/* Port menus */}
-          <Show when={menu()} keyed>
-            {(m) => (
-              <div class="fb-menu fb-bpv-menu" role="menu" style={{ left: `${menuPos(m).x}px`, top: `${menuPos(m).y}px` }}>
-                <Show when={m.kind === 'q' ? blockById((m as { blockId: string }).blockId) : undefined} keyed
-                  fallback={
-                    <Show when={m.kind === 'out'} fallback={
-                      <button type="button" role="menuitem" onClick={() => addPage((m as { sectionId: string }).sectionId, 'before')}><Icon name="plus" size="sm" />Add a page before</button>
-                    }>
-                      <button type="button" role="menuitem" onClick={() => addPage((m as { sectionId: string }).sectionId, 'after')}><Icon name="plus" size="sm" />Add a page after</button>
-                      <button type="button" role="menuitem" onClick={() => startPageWire((m as { sectionId: string }).sectionId, m.at)}><Icon name="branch" size="sm" />Connect to a page…</button>
-                    </Show>
-                  }>
-                  {(b) => (
-                    <>
-                      <span class="fb-cap fb-bpv-menu-t">Show the next thing only if "{label(b)}"…</span>
-                      <For each={choicesFor(b)}>
-                        {(c) => <button type="button" role="menuitem" onClick={() => startCondWire(b, c, m.at)}>{c.label}</button>}
-                      </For>
-                    </>
-                  )}
-                </Show>
-              </div>
-            )}
-          </Show>
-          <Show when={wire()?.kind === 'cond' ? (wire() as { text: string }).text : ''}>
-            {(t) => <span class="fb-bpv-wiretag" style={{ left: `${cursor().x + 14}px`, top: `${cursor().y + 14}px` }}>{t()}</span>}
-          </Show>
         </div>
 
+        {/* Port menus, drawn at screen size above the board */}
+        <Show when={menu()} keyed>
+          {(m) => (
+            <div class="fb-menu fb-bpv-menu" role="menu" style={{ left: `${menuPos(m).x}px`, top: `${menuPos(m).y}px` }}>
+              <Show when={m.kind === 'q' ? blockById((m as { blockId: string }).blockId) : undefined} keyed
+                fallback={
+                  <Show when={m.kind === 'out'} fallback={
+                    <button type="button" role="menuitem" onClick={() => addPage((m as { sectionId: string }).sectionId, 'before')}><Icon name="plus" size="sm" />Add a page before</button>
+                  }>
+                    <button type="button" role="menuitem" onClick={() => addPage((m as { sectionId: string }).sectionId, 'after')}><Icon name="plus" size="sm" />Add a page after</button>
+                    <button type="button" role="menuitem" onClick={() => startPageWire((m as { sectionId: string }).sectionId, m.at)}><Icon name="branch" size="sm" />Connect to a page…</button>
+                  </Show>
+                }>
+                {(b) => (
+                  <>
+                    <span class="fb-cap fb-bpv-menu-t">Show the next thing only if "{label(b)}"…</span>
+                    <For each={choicesFor(b)}>
+                      {(c) => <button type="button" role="menuitem" onClick={() => startCondWire(b, c, m.at)}>{c.label}</button>}
+                    </For>
+                  </>
+                )}
+              </Show>
+            </div>
+          )}
+        </Show>
+        <Show when={wire()?.kind === 'cond' ? (wire() as { text: string }).text : ''}>
+          {(t) => <span class="fb-bpv-wiretag" style={{ left: `${toStage(cursor()).x + 14}px`, top: `${toStage(cursor()).y + 14}px` }}>{t()}</span>}
+        </Show>
         <div class="fb-bpv-tools">
           <button type="button" class="fb-btn fb-btn--secondary fb-btn--sm" onClick={center} title="Bring all pages into view"><Icon name="monitor" size="sm" />Center</button>
-          <button type="button" class="fb-btn fb-btn--secondary fb-btn--sm" disabled={!ed.doc.sections.some((s) => s.pos || s.bend)}
+          <button type="button" class="fb-btn fb-btn--secondary fb-btn--sm" disabled={!ed.doc.sections.some((s) => s.pos || s.bend || s.rows.some((r) => r.columns.some((c) => c.blocks.some((b) => b.bends))))}
             onClick={() => ed.actions.clearPositions()} title="Put every page back in a row, in page order, with straight lines">
             <Icon name="columns" size="sm" />Auto layout
           </button>
+          <span class="fb-bpv-zoom" role="group" aria-label="Zoom">
+            <button type="button" class="fb-btn fb-btn--ghost fb-btn--sm fb-btn--icon" aria-label="Zoom out" title="Zoom out (Ctrl −)" disabled={zoom() <= ZOOM_MIN} onClick={() => zoomAt(zoom() / 1.2)}><Icon name="minus" size="sm" /></button>
+            <button type="button" class="fb-btn fb-btn--ghost fb-btn--sm fb-bpv-zoom-n" title="Reset to 100% (Ctrl 0)" onClick={() => zoomAt(1)}>{Math.round(zoom() * 100)}%</button>
+            <button type="button" class="fb-btn fb-btn--ghost fb-btn--sm fb-btn--icon" aria-label="Zoom in" title="Zoom in (Ctrl +)" disabled={zoom() >= ZOOM_MAX} onClick={() => zoomAt(zoom() * 1.2)}><Icon name="plus" size="sm" /></button>
+          </span>
+          <Show when={!panel().open}>
+            <button type="button" class="fb-btn fb-btn--secondary fb-btn--sm" onClick={() => setPanel({ ...panel(), open: true })}><Icon name="columns" size="sm" />Show panel</button>
+          </Show>
           <span class="fb-bpv-legend" aria-hidden="true"><i class="is-flow" />Next page<i class="is-cond" />Only if<i class="is-bypass" />Otherwise</span>
         </div>
         <p class="fb-bpv-note" role="status">{note() || 'Right-drag or scroll to move around. Click a dot to add a condition or a page.'}</p>
       </div>
-      <BlueprintPanel />
+      <Show when={panel().open}>
+        <BlueprintPanel dock={panel().dock} onDock={(dock) => setPanel({ dock, open: true })} onHide={() => setPanel({ ...panel(), open: false })} />
+      </Show>
     </div>
   );
 }
 
 /** The side panel: when the selected page or question shows. Reads the live form, so changes show at once. */
-function BlueprintPanel() {
+function BlueprintPanel(props: { dock: 'left' | 'right' | 'bottom'; onDock: (d: 'left' | 'right' | 'bottom') => void; onHide: () => void }) {
   const ed = useEditor();
   const target = createMemo(() => { const id = ed.selected(); return id ? locate(ed.doc, id) : null; });
   return (
     <aside class="fb-insp fb-bpv-panel" aria-label="Condition">
+      <div class="fb-bpv-panel-bar">
+        <Seg small label="Panel position" value={props.dock} onChange={props.onDock}
+          options={[{ value: 'left', label: 'Left' }, { value: 'bottom', label: 'Bottom' }, { value: 'right', label: 'Right' }]} />
+        <button type="button" class="fb-btn fb-btn--ghost fb-btn--sm fb-btn--icon" aria-label="Hide panel" title="Hide panel" onClick={props.onHide}><Icon name="x" size="sm" /></button>
+      </div>
       <Show when={target()} fallback={
         <div class="fb-insp-s">
           <div class="fb-insp-t">Blueprint</div>

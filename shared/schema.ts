@@ -44,14 +44,16 @@ export type Block = {
   max?: number; // scale, rating
   url?: string; // image src, link button href
   action?: ButtonAction;
+  /** Blueprint view only: how far the middle of the condition line from question `id` to this block is moved. */
+  bends?: Record<string, { x: number; y: number }>;
 };
 export type Column = { id: string; blocks: Block[] };
 export type Row = { id: string; columns: Column[] };
 /**
  * A section is one page of the form. Blueprint view only (owner, never shown to visitors): `pos` is where its node
- * sits, `bend` moves the middle of the line that leads into it.
+ * sits, `bend` moves the middle of the line that leads into it, `size` is its width and minimum height, `spacing` the gap between its blocks.
  */
-export type Section = { id: string; title?: string; showIf?: Rule; rows: Row[]; pos?: { x: number; y: number }; bend?: { x: number; y: number } };
+export type Section = { id: string; title?: string; showIf?: Rule; rows: Row[]; pos?: { x: number; y: number }; bend?: { x: number; y: number }; size?: { w: number; h: number }; spacing?: number };
 export type FormDoc = {
   title: string; description?: string; thankYou?: string; sections: Section[];
   theme?: FormTheme; background?: FormBackground; qr?: QrDesign; typography?: FormTypography;
@@ -100,6 +102,20 @@ const str = (x: unknown, max: number) => (typeof x === 'string' ? x.slice(0, max
 const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);
 const id = (x: unknown) => typeof x === 'string' && /^[\w-]{1,64}$/.test(x);
 
+/** Blueprint line bends per source question: valid ids and points only, at most 50. */
+function parseBends(x: unknown): Record<string, { x: number; y: number }> | undefined {
+  if (!isObj(x)) return undefined;
+  const out: Record<string, { x: number; y: number }> = {};
+  for (const [k, v] of Object.entries(x).slice(0, 50)) { const p = parsePos(v); if (id(k) && p) out[k] = p; }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** A blueprint node size: width 200 to 1200, extra height 0 to 4000. */
+function parseSize(x: unknown): { w: number; h: number } | undefined {
+  if (!isObj(x) || num(x.w) === undefined || num(x.h) === undefined) return undefined;
+  return { w: Math.round(Math.max(200, Math.min(1200, x.w))), h: Math.round(Math.max(0, Math.min(4000, x.h))) };
+}
+
 /** A blueprint point (node position or line bend): two finite numbers, rounded and kept in a sane range. */
 function parsePos(x: unknown): { x: number; y: number } | undefined {
   if (!isObj(x) || num(x.x) === undefined || num(x.y) === undefined) return undefined;
@@ -128,6 +144,7 @@ function parseBlock(x: unknown): Block | null {
     options: Array.isArray(x.options) ? x.options.filter((o: unknown) => typeof o === 'string').slice(0, 100).map((o: string) => o.slice(0, 200)) : undefined,
     min: num(x.min), max: num(x.max), url: str(x.url, 2000),
     action: ['next', 'back', 'submit', 'link'].includes(x.action) ? x.action : undefined,
+    bends: parseBends(x.bends),
   };
 }
 
@@ -149,7 +166,7 @@ export function parseFormDoc(x: unknown): FormDoc | null {
       }
       rows.push({ id: r.id, columns });
     }
-    sections.push({ id: s.id, title: str(s.title, 500), showIf: parseRule(s.showIf), rows, pos: parsePos(s.pos), bend: parsePos(s.bend) });
+    sections.push({ id: s.id, title: str(s.title, 500), showIf: parseRule(s.showIf), rows, pos: parsePos(s.pos), bend: parsePos(s.bend), size: parseSize(s.size), spacing: num(s.spacing) === undefined ? undefined : Math.round(Math.max(0, Math.min(200, s.spacing))) });
   }
   // Ids are answer keys and drag-and-drop keys, so they must be unique.
   const ids = sections.flatMap((s) => [s.id, ...s.rows.flatMap((r) => [r.id, ...r.columns.flatMap((c) => [c.id, ...c.blocks.map((b) => b.id)])])]);

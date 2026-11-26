@@ -360,7 +360,7 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 /* A free board: no scrollbars; the world moves with the pan (right-drag or wheel), and so do the dots. */
 .fb-bpv-stage { position: relative; overflow: hidden; overflow: clip; /* clip: focus can never scroll it; panning shows focused items */ user-select: none; background: radial-gradient(circle, var(--grid, var(--border)) 1px, transparent 1.4px) 0 0 / 20px 20px, var(--bg); }
 .fb-bpv-stage.is-panning { cursor: grabbing; }
-.fb-bpv-world { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.fb-bpv-world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
 .fb-bpv-tools { position: absolute; top: 12px; left: 12px; z-index: 6; display: inline-flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 6px 10px 6px 6px;
   background: var(--surface); border: var(--bw, 1px) solid var(--border); border-radius: var(--radius-ctl); box-shadow: var(--shadow-card); }
 .fb-bpv-legend { display: inline-flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); font-family: var(--label-font, inherit); }
@@ -404,12 +404,12 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 .fb-bpv-node-h > .fb-i { color: var(--muted); flex: none; }
 
 /* Internal circuit: a spine down the left edge, a branch into each row, a track across each row's columns. */
-.fb-bpv-flow { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 14px 30px; }
+.fb-bpv-flow { position: relative; display: flex; flex-direction: column; gap: var(--gap, 10px); padding: 12px 12px 14px 30px; }
 .fb-bpv-flow::before { content: ""; position: absolute; left: 15px; top: 0; bottom: 14px; border-left: 2px solid var(--border-strong); }
-.fb-bpv-row { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 6px; }
+.fb-bpv-row { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: var(--gap, 10px); }
 .fb-bpv-row::before { content: ""; position: absolute; left: -15px; top: 17px; width: 15px; border-top: 2px solid var(--border-strong); }
 .fb-bpv-row::after { content: ""; position: absolute; left: -19px; top: 13px; width: 10px; height: 10px; border-radius: 50%; background: var(--border-strong); box-shadow: 0 0 0 2px var(--surface); }
-.fb-bpv-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fb-bpv-col { position: relative; display: flex; flex-direction: column; gap: var(--gap, 10px); min-width: 0; }
 .fb-bpv-elw { position: relative; }
 .fb-bpv-el { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; min-height: 34px; padding: 6px 8px; text-align: left; cursor: pointer;
   background: var(--surface2); color: var(--muted); border: var(--bw, 1px) solid var(--border); border-radius: var(--radius-ctl); font-size: 12px; }
@@ -448,7 +448,39 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 .fb-bpv-edge.is-elem { stroke: var(--accent-ink, var(--accent)); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: .75; }
 .fb-bpv-edge.is-elem.is-on { stroke-width: 2.5; opacity: 1; }
 .fb-bpv-arrow.is-elem { fill: var(--accent-ink, var(--accent)); }
-.fb-bpv-elabel { position: absolute; z-index: 4; transform: translate(-50%, -50%); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.fb-bpv-elabel { position: absolute; z-index: 4; transform: translate(-50%, calc(-100% - 3px)); /* above its line, clear of the gap handles */ max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 2px 8px; border-radius: 999px; cursor: pointer; background: var(--surface); color: var(--text);
   border: var(--bw, 1px) solid var(--accent-ink, var(--accent)); font: 600 11px/1.4 var(--label-font, inherit); }
 .fb-bpv-elabel.is-on, .fb-bpv-elabel:hover { background: var(--accent-soft); }
+
+/* Page resize corner */
+.fb-bpv-resize { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; padding: 0; border: 0; cursor: nwse-resize; background: transparent;
+  border-radius: 0 0 var(--radius) 0; }
+.fb-bpv-resize::before { content: ""; position: absolute; right: 4px; bottom: 4px; width: 8px; height: 8px;
+  border-right: 2px solid var(--border-strong); border-bottom: 2px solid var(--border-strong); }
+.fb-bpv-resize:hover::before, .fb-bpv-resize:focus-visible::before { border-color: var(--accent-ink, var(--accent)); }
+.fb-bpv-elabel { touch-action: none; cursor: grab; }
+
+/* Zoom control in the toolbar */
+.fb-bpv-zoom { display: inline-flex; align-items: center; gap: 2px; }
+.fb-bpv-zoom-n { min-width: 56px; font-variant-numeric: tabular-nums; }
+
+/* Side panel: hide, and dock left, right or bottom */
+.fb-bpv-panel-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: var(--bw, 1px) solid var(--border); }
+.fb-bpv.no-panel { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.fb-bpv[data-dock="left"] { grid-template-columns: 340px minmax(0, 1fr); }
+.fb-bpv[data-dock="left"] > .fb-bpv-panel { order: -1; border-left: 0; border-right: var(--bw, 1px) solid var(--border); }
+.fb-bpv[data-dock="bottom"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 38%); }
+.fb-bpv[data-dock="bottom"] > .fb-bpv-panel { border-left: 0; border-top: var(--bw, 1px) solid var(--border); }
+.fb-bpv.no-panel[data-dock] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+
+/* Spacing handles: thin bars in the middle of the gaps between rows and columns, shown when the page is hovered. */
+.fb-bpv-gap { position: absolute; z-index: 2; opacity: 0; transition: opacity var(--t-hover) var(--ease); }
+.fb-bpv-gap::before { content: ""; position: absolute; border-radius: 2px; background: var(--border-strong); }
+.fb-bpv-gap.is-row { left: 25%; right: 25%; height: 12px; bottom: calc(var(--gap, 10px) / -2 - 6px); cursor: row-resize; }
+.fb-bpv-gap.is-row::before { left: 0; right: 0; top: 5px; height: 2px; }
+.fb-bpv-gap.is-col { top: 50%; bottom: 0; width: 12px; right: calc(var(--gap, 10px) / -2 - 6px); cursor: col-resize; }
+.fb-bpv-gap.is-col::before { top: 0; bottom: 0; left: 5px; width: 2px; }
+.fb-bpv-node:hover .fb-bpv-gap, .fb-bpv-gap:focus-visible { opacity: .6; }
+.fb-bpv-gap:hover, .fb-bpv-gap:focus-visible { opacity: 1; }
+.fb-bpv-gap:hover::before, .fb-bpv-gap:focus-visible::before { background: var(--accent-ink, var(--accent)); }
