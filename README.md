@@ -72,7 +72,7 @@ You need [Bun](https://bun.com/docs/installation) 1.4 or later.
    bun run build
    bun run start
    ```
-4. Open <http://localhost:3000/admin> and sign in.
+4. Open <http://localhost:4200/admin> and sign in.
 
 ### Development mode
 
@@ -80,8 +80,8 @@ You need [Bun](https://bun.com/docs/installation) 1.4 or later.
 bun run dev
 ```
 
-This starts the API server on port 3000 and the Vite dev server on port 5173.
-Open <http://localhost:5173/admin>. The pages reload when you change the code.
+This starts the Vite dev server on port 4200 and the API server behind it on port 4201.
+Open <http://localhost:4200/admin>. The pages reload when you change the code.
 
 | Command | What it does |
 |---|---|
@@ -99,7 +99,7 @@ Bun reads `.env` automatically. Never commit `.env`: it holds your password.
 |---|---|---|---|
 | `ADMIN_USERNAME` | Yes | – | Owner username for dev mode. |
 | `ADMIN_PASSWORD` | Yes | – | Owner password. At least 8 characters. The server does not start without it. |
-| `PORT` | No | `3000` | HTTP port. |
+| `PORT` | No | `4200` | HTTP port. |
 | `DATABASE_PATH` | No | `data/feedbacker.db` | Path of the SQLite file. The folder is made if it does not exist. Uploaded images go into an `uploads` folder next to it. |
 
 ## Deploy
@@ -125,7 +125,7 @@ hosts) cannot run Feedbacker.
    ```bash
    docker compose up -d --build
    ```
-3. Open `http://<your-server>:3000/admin`.
+3. Open `http://<your-server>:4200/admin`.
 
 The database and the uploaded images are in the Docker volume `feedbacker-data`. To back them up, copy the folder
 `/app/data` out of the container (for example with `docker compose cp feedbacker:/app/data ./backup`).
@@ -135,7 +135,7 @@ For HTTPS, put a reverse proxy in front of the container. Example with [Caddy](h
 
 ```
 feedback.example.com {
-    reverse_proxy localhost:3000
+    reverse_proxy localhost:4200
 }
 ```
 
@@ -187,14 +187,14 @@ on your computer.
 2. In the service's **Variables**, add `ADMIN_USERNAME` and `ADMIN_PASSWORD` (use a long password).
 3. Attach a volume to the service with the mount path `/app/data`.
 4. In **Settings → Networking**, select **Generate Domain** (or add your own domain). If Railway asks for a port, enter
-   `3000`.
+   `4200`.
 5. Open `https://<your-domain>/admin` and sign in.
 
 To update, push to GitHub; Railway builds and deploys the new version, and the data stays on the volume. You do not
 need the `RAILWAY_RUN_UID` variable: the container gives the volume to its own user at start, then runs without root
 rights. The Dockerfile has no `VOLUME` line on purpose, because Railway rejects it.
 
-Render and similar platforms work the same way: build the `Dockerfile`, set the two secrets, expose port `3000`, and
+Render and similar platforms work the same way: build the `Dockerfile`, set the two secrets, expose port `4200`, and
 attach a persistent disk at `/app/data`.
 
 ### Option D: a plain server without Docker
@@ -270,8 +270,8 @@ If a user asks you to set up, run or deploy this project, follow these steps in 
    The password must have at least 8 characters. Do not invent a password and do not show it in chat.
    Never commit `.env`. Never put the password in any other file.
 4. Run `bun test` and `bun run typecheck`. Both must pass before you continue.
-5. Local run: run `bun run build`, then `bun run start`. Tell the user to open `http://localhost:3000/admin`.
-   For development, run `bun run dev` and use `http://localhost:5173/admin`.
+5. Local run: run `bun run build`, then `bun run start`. Tell the user to open `http://localhost:4200/admin`.
+   For development, run `bun run dev` and use the same address, `http://localhost:4200/admin`.
 6. Deploy: ask the user where to deploy, then follow [Deploy](#deploy). Make sure that:
    - the database folder `/app/data` (Docker) or the `DATABASE_PATH` folder is on persistent storage,
    - HTTPS is in front of the app,

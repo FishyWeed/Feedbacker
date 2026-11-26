@@ -6,11 +6,11 @@ app = "feedbacker" # must be unique on Fly.io: `fly launch` asks for a name and 
 primary_region = "sin" # `fly launch` asks; `fly platform regions` lists them
 
 [env]
-  PORT = "3000"
+  PORT = "4200"
   DATABASE_PATH = "/app/data/feedbacker.db"
 
 [http_service]
-  internal_port = 3000
+  internal_port = 4200
   force_https = true
   # Stop the machine when nobody uses it and start it on the next visit (a few seconds' wait). Sign-ins survive this.
   auto_stop_machines = "stop"

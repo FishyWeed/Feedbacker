@@ -11,7 +11,7 @@ if (!ADMIN_USERNAME || !ADMIN_PASSWORD || ADMIN_PASSWORD.length < 8) {
   process.exit(1);
 }
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.PORT ?? 4200);
 const dbPath = process.env.DATABASE_PATH ?? 'data/feedbacker.db';
 const db = openDb(dbPath);
 const dataDir = dirname(dbPath);
