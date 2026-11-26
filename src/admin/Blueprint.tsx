@@ -6,7 +6,9 @@
 //   Ctrl +/-/0 or the toolbar zoom. "Center" brings the pages back.
 // - Nodes: drag by the header, or arrow keys; resize from the corner. Lines (page lines and condition lines between
 //   elements): drag the middle (label or "+") to bend; double-click to straighten.
-// - The side panel can be hidden and docked left, right or bottom (remembered in this browser).
+// - Blocks: resize a block's box from its corner. A page grows to fit its boxes.
+// - The side panel docks left, right or bottom, resizes from its inner edge and collapses to a rail (all remembered
+//   in this browser).
 // - Question ports: click the dot beside a question, pick an answer, then pull the wire to a later question or page:
 //   that target shows only for that answer. Page ports: add a page before or after, or wire to another page to make
 //   it come next.
@@ -14,9 +16,8 @@
 import { createEffect, createMemo, createSignal, For, Show, onCleanup, onMount } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { canUseQuestion, ruleText, withCondition } from '../../shared/logic';
-import { isQuestion, KIND_LABELS, optionsOf, type Block, type Condition, type Section } from '../../shared/schema';
+import { isQuestion, KIND_LABELS, optionsOf, type Block, type Condition, type Row, type Section } from '../../shared/schema';
 import { Icon, KIND_ICON } from '../ui/icons';
-import { Seg } from '../ui/kit';
 import { locate, useEditor } from './editorStore';
 import { RuleEditor } from './Inspector';
 
@@ -27,6 +28,10 @@ const MOVE_PX = 20; // arrow-key step (Shift: 3 steps)
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 2;
 const MIN_W = 200;
+const FLOW_PAD = 44; // a page's left and right padding around its blocks, plus its border
+const BOX_GAP = 10; // between columns
+const BOX_MIN_W = 80;
+const BOX_MIN_H = 34;
 
 type Pt = { x: number; y: number };
 type Edge = { key: string; d: string; kind: 'flow' | 'cond' | 'bypass'; mid: Pt; target?: Section; page?: number };
@@ -34,16 +39,21 @@ type Menu = { kind: 'q'; blockId: string; at: Pt } | { kind: 'out' | 'in'; secti
 type Wire = { kind: 'cond'; from: string; cond: Condition; text: string; at: Pt } | { kind: 'page'; from: string; at: Pt };
 
 /**
- * A cubic curve between two ports. `dip` bends it down (the "Otherwise" skip); `bend` moves its middle by that much
- * (a cubic's middle moves 3/4 of its control points, hence / 0.75). Returns the path and its middle.
+ * A line between two ports. `dip` drops its middle (the "Otherwise" skip, by 3/4 of `dip`); `bend` moves its middle
+ * by that much. A bent line is two curves through the moved middle. Both ends stay level, so the arrow at the end
+ * always points straight into its port. Returns the path and its middle.
  */
 function curve(a: Pt, b: Pt, dip = 0, bend: Pt = { x: 0, y: 0 }): { d: string; mid: Pt } {
   const dx = Math.max(60, Math.abs(b.x - a.x) / 2);
-  const c1 = { x: a.x + dx + bend.x / 0.75, y: a.y + dip + bend.y / 0.75 };
-  const c2 = { x: b.x - dx + bend.x / 0.75, y: b.y + dip + bend.y / 0.75 };
+  const m = { x: (a.x + b.x) / 2 + bend.x, y: (a.y + b.y) / 2 + dip * 0.75 + bend.y };
+  if (!dip && !bend.x && !bend.y) return { d: `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`, mid: m };
+  const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const t = { x: (b.x - a.x) / len, y: (b.y - a.y) / len }; // the line's direction at the middle
+  const k1 = Math.max(40, Math.hypot(m.x - a.x, m.y - a.y) * 0.45);
+  const k2 = Math.max(40, Math.hypot(b.x - m.x, b.y - m.y) * 0.45);
   return {
-    d: `M ${a.x} ${a.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`,
-    mid: { x: (a.x + 3 * c1.x + 3 * c2.x + b.x) / 8, y: (a.y + 3 * c1.y + 3 * c2.y + b.y) / 8 },
+    d: `M ${a.x} ${a.y} C ${a.x + k1} ${a.y}, ${m.x - t.x * k1} ${m.y - t.y * k1}, ${m.x} ${m.y} C ${m.x + t.x * k2} ${m.y + t.y * k2}, ${b.x - k2} ${b.y}, ${b.x} ${b.y}`,
+    mid: m,
   };
 }
 
@@ -63,7 +73,7 @@ export default function Blueprint() {
   const [zoom, setZoom] = createSignal(1);
   const [sizeDrag, setSizeDrag] = createSignal<{ id: string; w: number; h: number } | null>(null);
   const [elemBend, setElemBend] = createSignal<{ key: string; x: number; y: number } | null>(null);
-  const [gapDrag, setGapDrag] = createSignal<{ id: string; x: number; y: number } | null>(null);
+  const [boxDrag, setBoxDrag] = createSignal<{ id: string; w: number; h: number } | null>(null);
   const [drag, setDrag] = createSignal<{ id: string; x: number; y: number } | null>(null);
   const [bendDrag, setBendDrag] = createSignal<{ id: string; x: number; y: number } | null>(null);
   const [menu, setMenu] = createSignal<Menu | null>(null);
@@ -111,9 +121,17 @@ export default function Blueprint() {
   onCleanup(() => sizes.disconnect());
   const measure = (el: HTMLElement) => sizes.observe(el);
 
-  const widthOf = (s: Section) => { const d = sizeDrag(); return d?.id === s.id ? d.w : s.size?.w ?? NODE_W; };
-  const DEFAULT_GAP = 10;
-  const spacingOf = (s: Section) => { const d = gapDrag(); return d?.id === s.id ? d : s.spacing ?? { x: DEFAULT_GAP, y: DEFAULT_GAP }; };
+  // A block's box can have its own size. A column is at least as wide as its widest sized box, and a page at least as
+  // wide as its widest row needs, so a box never sticks out of its page.
+  const boxOf = (b: Block) => { const d = boxDrag(); return d?.id === b.id ? d : b.size; };
+  // In a row with a sized box, the other columns keep the smallest box width, so a wide box never squeezes them out.
+  const colMins = (r: Row) => {
+    const floor = r.columns.some((c) => c.blocks.some(boxOf)) ? BOX_MIN_W : 0;
+    return r.columns.map((c) => Math.max(floor, ...c.blocks.map((b) => boxOf(b)?.w ?? 0)));
+  };
+  const rowCols = (r: Row) => colMins(r).map((w) => `minmax(${w}px, 1fr)`).join(' ');
+  const needW = (s: Section) => FLOW_PAD + Math.max(0, ...s.rows.map((r) => colMins(r).reduce((t, w) => t + w, 0) + (r.columns.length - 1) * BOX_GAP));
+  const widthOf = (s: Section) => { const d = sizeDrag(); return Math.max(d?.id === s.id ? d.w : s.size?.w ?? NODE_W, needW(s)); };
   const minHeightOf = (s: Section) => { const d = sizeDrag(); return d?.id === s.id ? d.h : s.size?.h ?? 0; };
   const autoXs = createMemo(() => { let x = 160; return ed.doc.sections.map((s) => { const at = x; x += widthOf(s) + GAP_X; return at; }); });
   const auto = (i: number): Pt => ({ x: autoXs()[i] ?? 160, y: 90 });
@@ -223,33 +241,28 @@ export default function Blueprint() {
       setSizeDrag(null);
     });
   }
-  // --- Spacing inside a page, per axis: a bar between rows changes only the vertical space (rows and stacked blocks),
-  // a bar between columns only the horizontal space. Drag, arrow keys, or double-click to reset that axis. ---
-  const clampGap = (n: number) => Math.round(Math.max(0, Math.min(200, n)));
-  const setSpacing = (s: Section, axis: 'x' | 'y', v: number | null) => {
-    const now = spacingOf(s);
-    ed.actions.updateSection(s.id, { spacing: { x: now.x, y: now.y, [axis]: v === null ? DEFAULT_GAP : clampGap(v) } });
-  };
-  function pressGap(s: Section, axis: 'x' | 'y', e: PointerEvent) {
+  // --- Resizing a block's box: drag its corner, arrow keys on the corner, double-click resets. ---
+  /** The box's size now, measured (unscaled layout pixels, so the zoom does not change it). */
+  const boxNow = (b: Block, corner: HTMLElement) => { const el = corner.previousElementSibling as HTMLElement; return boxOf(b) ?? { w: el.offsetWidth, h: el.offsetHeight }; };
+  const clampBox = (w: number, h: number) => ({ w: Math.round(Math.max(BOX_MIN_W, Math.min(1200, w))), h: Math.round(Math.max(BOX_MIN_H, Math.min(4000, h))) });
+  function pressBox(b: Block, e: PointerEvent) {
     if (e.button !== 0 || wire()) return;
     e.stopPropagation();
-    const v0 = { x: spacingOf(s).x, y: spacingOf(s).y };
-    // The bar sits in the middle of its gap, so the gap grows twice as fast as the bar moves.
-    dragBy(e, (dx, dy) => setGapDrag({ id: s.id, ...v0, [axis]: clampGap(v0[axis] + 2 * (axis === 'x' ? dx : dy)) }), (moved) => {
-      const d = gapDrag();
-      if (moved && d) { setSpacing(s, axis, d[axis]); eatNextClick(); }
-      setGapDrag(null);
+    const s0 = boxNow(b, e.currentTarget as HTMLElement);
+    dragBy(e, (dx, dy) => setBoxDrag({ id: b.id, ...clampBox(s0.w + dx, s0.h + dy) }), (moved) => {
+      const d = boxDrag();
+      if (moved && d) { ed.actions.updateBlock(b.id, { size: { w: d.w, h: d.h } }); eatNextClick(); }
+      setBoxDrag(null);
     });
   }
-  function keyGap(s: Section, axis: 'x' | 'y', e: KeyboardEvent) {
+  function keyBox(b: Block, e: KeyboardEvent) {
     const a = ARROWS[e.key];
     if (!a) return;
     e.preventDefault();
-    const step = (e.shiftKey ? 12 : 4) * (axis === 'x' ? a.x || -a.y : a.y || a.x);
-    setSpacing(s, axis, spacingOf(s)[axis] + step);
+    const step = e.shiftKey ? 24 : 8;
+    const s0 = boxNow(b, e.currentTarget as HTMLElement);
+    ed.actions.updateBlock(b.id, { size: clampBox(s0.w + a.x * step, s0.h + a.y * step) });
   }
-  const gapLabel = (s: Section, axis: 'x' | 'y') =>
-    `${axis === 'y' ? 'Space between rows' : 'Space between columns'}: ${spacingOf(s)[axis]} pixels. Drag or use the arrow keys; double-click resets.`;
 
   function keyResize(s: Section, e: KeyboardEvent) {
     const a = ARROWS[e.key];
@@ -411,7 +424,7 @@ export default function Blueprint() {
   // --- Lines between elements: from a question's dot to each element whose rule uses it. Blocks size themselves, so
   // their ends are measured from the page (in board coordinates, so panning does not change them). ---
   const [chips, setChips] = createSignal<Record<string, { l: Pt; r: Pt }>>({});
-  const layoutKey = createMemo(() => JSON.stringify(ed.doc.sections.map((s) => s.rows.map((r) => r.columns.map((c) => c.blocks.map((b) => [b.id, b.label, !!b.showIf]))))));
+  const layoutKey = createMemo(() => JSON.stringify(ed.doc.sections.map((s) => s.rows.map((r) => r.columns.map((c) => c.blocks.map((b) => [b.id, b.label, !!b.showIf, b.size?.w, b.size?.h]))))));
   function measureChips() {
     const out: Record<string, { l: Pt; r: Pt }> = {};
     for (const el of stage.querySelectorAll<HTMLElement>('[data-bpv-block]')) {
@@ -420,7 +433,7 @@ export default function Blueprint() {
     }
     setChips(out);
   }
-  createEffect(() => { positions(); heights(); layoutKey(); ed.doc.sections.map(widthOf); ed.doc.sections.map((x) => { const g = spacingOf(x); return g.x + g.y; }); queueMicrotask(measureChips); });
+  createEffect(() => { positions(); heights(); layoutKey(); ed.doc.sections.map(widthOf); boxDrag(); queueMicrotask(measureChips); });
   const SHORT: Record<string, (v: string) => string> = {
     equals: (v) => `"${v}"`, not_equals: (v) => `not "${v}"`, contains: (v) => `has "${v}"`, gt: (v) => `> ${v}`, lt: (v) => `< ${v}`,
     answered: () => 'answered', not_answered: () => 'not answered',
@@ -441,21 +454,58 @@ export default function Blueprint() {
     return out;
   });
 
-  // Side panel: dock (left, right, bottom) and shown or hidden, kept per browser.
-  type Dock = 'left' | 'right' | 'bottom';
-  const readPanel = (): { dock: Dock; open: boolean } => {
-    try { const v = JSON.parse(localStorage.getItem('fb-bpv-panel') ?? 'null'); if (v && ['left', 'right', 'bottom'].includes(v.dock)) return { dock: v.dock, open: v.open !== false }; } catch { /* default */ }
-    return { dock: 'right', open: true };
+  // Side panel: dock (left, right, bottom), open or collapsed to a rail, and its size (width at a side, height at the
+  // bottom), kept per browser.
+  type PanelState = { dock: Dock; open: boolean; w: number; h: number };
+  const PANEL = { w: 340, h: 280 };
+  const clampW = (w: number) => Math.round(Math.max(240, Math.min(720, window.innerWidth - 320, w)));
+  const clampH = (h: number) => Math.round(Math.max(120, Math.min(window.innerHeight * 0.7, h)));
+  const readPanel = (): PanelState => {
+    try {
+      const v = JSON.parse(localStorage.getItem('fb-bpv-panel') ?? 'null');
+      if (v && DOCKS.includes(v.dock)) return { dock: v.dock, open: v.open !== false, w: clampW(Number(v.w) || PANEL.w), h: clampH(Number(v.h) || PANEL.h) };
+    } catch { /* default */ }
+    return { dock: 'right', open: true, ...PANEL };
   };
   const [panel, setPanelState] = createSignal(readPanel());
-  const setPanel = (v: { dock: Dock; open: boolean }) => { setPanelState(v); try { localStorage.setItem('fb-bpv-panel', JSON.stringify(v)); } catch { /* private mode */ } };
+  const savePanel = () => { try { localStorage.setItem('fb-bpv-panel', JSON.stringify(panel())); } catch { /* private mode */ } };
+  const setPanel = (v: Partial<PanelState>) => { setPanelState({ ...panel(), ...v }); savePanel(); };
+  const atBottom = () => panel().dock === 'bottom';
+  const panelSize = () => (atBottom() ? panel().h : panel().w);
+  const setPanelSize = (n: number) => setPanelState({ ...panel(), ...(atBottom() ? { h: clampH(n) } : { w: clampW(n) }) });
+  const [gripping, setGripping] = createSignal(false);
+  /** Drag the panel's inner edge: toward the board makes the panel bigger. */
+  function pressGrip(e: PointerEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const n0 = panelSize();
+    const sx = e.clientX;
+    const sy = e.clientY;
+    const dock = panel().dock;
+    setGripping(true);
+    const move = (ev: PointerEvent) => setPanelSize(n0 + (dock === 'right' ? sx - ev.clientX : dock === 'left' ? ev.clientX - sx : sy - ev.clientY));
+    const up = () => { setGripping(false); savePanel(); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+  function keyGrip(e: KeyboardEvent) {
+    const a = ARROWS[e.key];
+    if (!a) return;
+    e.preventDefault();
+    const dock = panel().dock;
+    const grow = dock === 'right' ? -a.x : dock === 'left' ? a.x : -a.y;
+    if (!grow) return;
+    setPanelSize(panelSize() + grow * (e.shiftKey ? 60 : 20));
+    savePanel();
+  }
+  const panelVars = () => (panel().open ? { '--bpv-pw': `${panel().w}px`, '--bpv-ph': `${panel().h}px` } : { '--bpv-pw': `${RAIL}px`, '--bpv-ph': `${RAIL}px` });
 
   const label = (b: Block) => b.label?.trim() || KIND_LABELS[b.kind];
   const sel = () => ed.selected();
   const wirePath = () => { const w = wire(); return w ? curve(w.at, cursor()).d : ''; };
 
   return (
-    <div class="fb-bpv" data-dock={panel().dock} classList={{ 'no-panel': !panel().open }}>
+    <div class="fb-bpv" data-dock={panel().dock} style={panelVars()}>
       <div ref={stage} class="fb-bpv-stage" classList={{ 'is-wiring': !!wire() }} style={{ 'background-position': `${pan().x}px ${pan().y}px`, 'background-size': `${20 * zoom()}px ${20 * zoom()}px` }} onPointerDown={pressStage} onWheel={wheel} onFocusIn={showFocused}
         onContextMenu={(e) => e.preventDefault()} onClick={(e) => (e.target === e.currentTarget || (e.target as Element).classList.contains('fb-bpv-world')) && !wire() && ed.select(null)}>
         <div class="fb-bpv-world" style={{ transform: `translate(${pan().x}px, ${pan().y}px) scale(${zoom()})` }}>
@@ -521,31 +571,26 @@ export default function Blueprint() {
                   <Show when={s.showIf}><span class="fb-badge fb-badge--cond"><Icon name="branch" />If</span></Show>
                 </header>
                 {/* The internal circuit: down through each row, across each row's columns. */}
-                <div class="fb-bpv-flow" style={{ '--gap-x': `${spacingOf(s).x}px`, '--gap-y': `${spacingOf(s).y}px` }}>
+                <div class="fb-bpv-flow">
                   <Show when={s.rows.some((r) => r.columns.some((c) => c.blocks.length))} fallback={<p class="fb-bpv-empty">No blocks yet</p>}>
                     <For each={s.rows}>
-                      {(r, ri) => (
-                        <div class="fb-bpv-row" style={{ '--n': r.columns.length }}>
-                          <Show when={ri() < s.rows.length - 1}>
-                            <span class="fb-bpv-gap is-row" role="separator" aria-orientation="horizontal" tabIndex={0} aria-label={gapLabel(s, 'y')} title="Drag up or down: space between rows · Double-click resets"
-                              onPointerDown={(e) => pressGap(s, 'y', e)} onKeyDown={(e) => keyGap(s, 'y', e)} onDblClick={() => setSpacing(s, 'y', null)} />
-                          </Show>
+                      {(r) => (
+                        <div class="fb-bpv-row" style={{ 'grid-template-columns': rowCols(r) }}>
                           <For each={r.columns}>
-                            {(c, ci) => (
+                            {(c) => (
                               <div class="fb-bpv-col">
-                                <Show when={ci() < r.columns.length - 1}>
-                                  <span class="fb-bpv-gap is-col" role="separator" aria-orientation="vertical" tabIndex={0} aria-label={gapLabel(s, 'x')} title="Drag left or right: space between columns · Double-click resets"
-                                    onPointerDown={(e) => pressGap(s, 'x', e)} onKeyDown={(e) => keyGap(s, 'x', e)} onDblClick={() => setSpacing(s, 'x', null)} />
-                                </Show>
                                 <For each={c.blocks}>
                                   {(b) => (
-                                    <div class="fb-bpv-elw">
-                                      <button type="button" data-bpv-block={b.id} class="fb-bpv-el"
+                                    <div class="fb-bpv-elw" style={{ width: boxOf(b) ? `${boxOf(b)!.w}px` : undefined }}>
+                                      <button type="button" data-bpv-block={b.id} class="fb-bpv-el" style={{ 'min-height': boxOf(b) ? `${boxOf(b)!.h}px` : undefined }}
                                         classList={{ 'is-q': isQuestion(b), 'is-cond': !!b.showIf, 'is-selected': sel() === b.id, 'is-target': canTarget(b.id, false), 'is-source': wire()?.from === b.id }}
                                         title={b.showIf ? `${label(b)} — ${ruleText(b.showIf, ed.doc)}` : label(b)} onClick={() => !wire() && ed.select(b.id)}>
                                         <Icon name={KIND_ICON[b.kind]} size="sm" /><span>{label(b)}</span>
                                         <Show when={b.showIf}><span class="fb-bpv-if" aria-label="Has a condition"><Icon name="branch" size="sm" /></span></Show>
                                       </button>
+                                      <button type="button" class="fb-bpv-elsize" aria-label={`Resize the box of "${label(b)}". Arrow keys change its size; double-click resets it.`}
+                                        title="Drag to resize · Double-click to reset" onPointerDown={(e) => pressBox(b, e)} onKeyDown={(e) => keyBox(b, e)}
+                                        onDblClick={() => ed.actions.updateBlock(b.id, { size: undefined })} />
                                       <Show when={isQuestion(b)}>
                                         <button type="button" class="fb-bpv-port is-q" aria-label={`Add a condition from "${label(b)}"`} title="Show something only for an answer to this question"
                                           onClick={(ev) => { ev.stopPropagation(); openMenu({ kind: 'q', blockId: b.id, at: centerOf(ev.currentTarget) }); }} />
@@ -628,31 +673,56 @@ export default function Blueprint() {
             <button type="button" class="fb-btn fb-btn--ghost fb-btn--sm fb-bpv-zoom-n" title="Reset to 100% (Ctrl 0)" onClick={() => zoomAt(1)}>{Math.round(zoom() * 100)}%</button>
             <button type="button" class="fb-btn fb-btn--ghost fb-btn--sm fb-btn--icon" aria-label="Zoom in" title="Zoom in (Ctrl +)" disabled={zoom() >= ZOOM_MAX} onClick={() => zoomAt(zoom() * 1.2)}><Icon name="plus" size="sm" /></button>
           </span>
-          <Show when={!panel().open}>
-            <button type="button" class="fb-btn fb-btn--secondary fb-btn--sm" onClick={() => setPanel({ ...panel(), open: true })}><Icon name="columns" size="sm" />Show panel</button>
-          </Show>
           <span class="fb-bpv-legend" aria-hidden="true"><i class="is-flow" />Next page<i class="is-cond" />Only if<i class="is-bypass" />Otherwise</span>
         </div>
         <p class="fb-bpv-note" role="status">{note() || 'Right-drag or scroll to move around. Click a dot to add a condition or a page.'}</p>
       </div>
-      <Show when={panel().open}>
-        <BlueprintPanel dock={panel().dock} onDock={(dock) => setPanel({ dock, open: true })} onHide={() => setPanel({ ...panel(), open: false })} />
+      <Show when={panel().open} fallback={
+        <div class="fb-bpv-rail">
+          <button type="button" class="fb-bpv-rail-btn" aria-label="Open the panel" title="Open the panel" onClick={() => setPanel({ open: true })}>
+            <span class={atBottom() ? 'fb-bpv-up' : undefined}><Icon name={OPEN_ICON[panel().dock]} size="sm" /></span><span>Panel</span>
+          </button>
+        </div>
+      }>
+        <aside class="fb-insp fb-bpv-panel" aria-label="Condition">
+          <div class="fb-bpv-grip" classList={{ 'is-active': gripping() }} role="separator" tabIndex={0} aria-orientation={atBottom() ? 'horizontal' : 'vertical'}
+            aria-label={`Panel ${atBottom() ? 'height' : 'width'}`} aria-valuenow={panelSize()} title="Drag to resize · Double-click to reset"
+            onPointerDown={pressGrip} onKeyDown={keyGrip} onDblClick={() => setPanel(atBottom() ? { h: PANEL.h } : { w: PANEL.w })} />
+          <BlueprintPanel dock={panel().dock} onDock={(dock) => setPanel({ dock })} onHide={() => setPanel({ open: false })} />
+        </aside>
       </Show>
     </div>
   );
 }
 
-/** The side panel: when the selected page or question shows. Reads the live form, so changes show at once. */
-function BlueprintPanel(props: { dock: 'left' | 'right' | 'bottom'; onDock: (d: 'left' | 'right' | 'bottom') => void; onHide: () => void }) {
+type Dock = 'left' | 'right' | 'bottom';
+const DOCKS: Dock[] = ['left', 'bottom', 'right'];
+const RAIL = 40; // the width (or height, at the bottom) of the collapsed panel
+/** Chevrons on the rail and on the collapse button point the way the panel moves. */
+const OPEN_ICON = { left: 'chev-right', right: 'chev-left', bottom: 'chev-down' } as const;
+const CLOSE_ICON = { left: 'chev-left', right: 'chev-right', bottom: 'chev-down' } as const;
+
+/** The side panel's content: when the selected page or question shows. Reads the live form, so changes show at once. */
+function BlueprintPanel(props: { dock: Dock; onDock: (d: Dock) => void; onHide: () => void }) {
   const ed = useEditor();
   const target = createMemo(() => { const id = ed.selected(); return id ? locate(ed.doc, id) : null; });
   return (
-    <aside class="fb-insp fb-bpv-panel" aria-label="Condition">
+    <>
       <div class="fb-bpv-panel-bar">
-        <Seg small label="Panel position" value={props.dock} onChange={props.onDock}
-          options={[{ value: 'left', label: 'Left' }, { value: 'bottom', label: 'Bottom' }, { value: 'right', label: 'Right' }]} />
-        <button type="button" class="fb-btn fb-btn--ghost fb-btn--sm fb-btn--icon" aria-label="Hide panel" title="Hide panel" onClick={props.onHide}><Icon name="x" size="sm" /></button>
+        <label class="fb-bpv-dock">
+          <span class="fb-cap">Dock</span>
+          <div class="fb-select">
+            <select value={props.dock} onChange={(e) => props.onDock(e.currentTarget.value as Dock)}>
+              <option value="left">Left</option><option value="bottom">Bottom</option><option value="right">Right</option>
+            </select>
+            <Icon name="chev-down" />
+          </div>
+        </label>
+        <button type="button" class="fb-btn fb-btn--ghost fb-btn--sm fb-btn--icon" aria-label="Collapse the panel" title="Collapse the panel" onClick={props.onHide}>
+          <Icon name={CLOSE_ICON[props.dock]} size="sm" />
+        </button>
       </div>
+      <div class="fb-bpv-panel-body">
       <Show when={target()} fallback={
         <div class="fb-insp-s">
           <div class="fb-insp-t">Blueprint</div>
@@ -691,6 +761,7 @@ function BlueprintPanel(props: { dock: 'left' | 'right' | 'bottom'; onDock: (d: 
           </Show>
         )}
       </Show>
-    </aside>
+      </div>
+    </>
   );
 }

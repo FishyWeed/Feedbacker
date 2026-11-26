@@ -356,7 +356,7 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 .fb-ticker-foot .fb-ticker > span { animation-duration: 90s; }
 
 /* Blueprint view (src/admin/Blueprint.tsx; prefix fb-bpv, because fb-bp is the design system block preview): pages as nodes on a dotted board, joined by flow lines. */
-.fb-bpv { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; }
+.fb-bpv { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) var(--bpv-pw, 340px); }
 /* A free board: no scrollbars; the world moves with the pan (right-drag or wheel), and so do the dots. */
 .fb-bpv-stage { position: relative; overflow: hidden; overflow: clip; /* clip: focus can never scroll it; panning shows focused items */ user-select: none; background: radial-gradient(circle, var(--grid, var(--border)) 1px, transparent 1.4px) 0 0 / 20px 20px, var(--bg); }
 .fb-bpv-stage.is-panning { cursor: grabbing; }
@@ -367,7 +367,8 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 .fb-bpv-legend i { display: inline-block; width: 22px; border-top: 2px solid var(--border-strong); margin-left: 6px; }
 .fb-bpv-legend i.is-cond { border-top: 2px dashed var(--accent-ink, var(--accent)); }
 .fb-bpv-legend i.is-bypass { border-top: 2px dashed var(--border); }
-.fb-bpv-panel { border-left: var(--bw, 1px) solid var(--border); overflow-y: auto; }
+.fb-bpv-panel { position: relative; border-left: var(--bw, 1px) solid var(--border); overflow: hidden; }
+.fb-bpv-panel-body { flex: 1; min-height: 0; overflow-y: auto; }
 @media (max-width: 900px) { .fb-bpv { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; } .fb-bpv-panel { border-left: 0; border-top: var(--bw, 1px) solid var(--border); max-height: 45vh; } }
 
 .fb-bpv-lines { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
@@ -404,13 +405,13 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 .fb-bpv-node-h > .fb-i { color: var(--muted); flex: none; }
 
 /* Internal circuit: a spine down the left edge, a branch into each row, a track across each row's columns. */
-.fb-bpv-flow { position: relative; display: flex; flex-direction: column; gap: var(--gap-y, 10px); padding: 12px 12px 14px 30px; }
+.fb-bpv-flow { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 14px 30px; }
 .fb-bpv-flow::before { content: ""; position: absolute; left: 15px; top: 0; bottom: 14px; border-left: 2px solid var(--border-strong); }
-.fb-bpv-row { position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); column-gap: var(--gap-x, 10px); }
+.fb-bpv-row { position: relative; display: grid; column-gap: 10px; }
 .fb-bpv-row::before { content: ""; position: absolute; left: -15px; top: 17px; width: 15px; border-top: 2px solid var(--border-strong); }
 .fb-bpv-row::after { content: ""; position: absolute; left: -19px; top: 13px; width: 10px; height: 10px; border-radius: 50%; background: var(--border-strong); box-shadow: 0 0 0 2px var(--surface); }
-.fb-bpv-col { position: relative; display: flex; flex-direction: column; gap: var(--gap-y, 10px); min-width: 0; }
-.fb-bpv-elw { position: relative; }
+.fb-bpv-col { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0; }
+.fb-bpv-elw { position: relative; width: 100%; }
 .fb-bpv-el { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; min-height: 34px; padding: 6px 8px; text-align: left; cursor: pointer;
   background: var(--surface2); color: var(--muted); border: var(--bw, 1px) solid var(--border); border-radius: var(--radius-ctl); font-size: 12px; }
 .fb-bpv-el.is-q { color: var(--text); }
@@ -448,7 +449,7 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 .fb-bpv-edge.is-elem { stroke: var(--accent-ink, var(--accent)); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: .75; }
 .fb-bpv-edge.is-elem.is-on { stroke-width: 2.5; opacity: 1; }
 .fb-bpv-arrow.is-elem { fill: var(--accent-ink, var(--accent)); }
-.fb-bpv-elabel { position: absolute; z-index: 4; transform: translate(-50%, calc(-100% - 3px)); /* above its line, clear of the gap handles */ max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.fb-bpv-elabel { position: absolute; z-index: 4; transform: translate(-50%, calc(-100% - 3px)); /* above its line */ max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 2px 8px; border-radius: 999px; cursor: pointer; background: var(--surface); color: var(--text);
   border: var(--bw, 1px) solid var(--accent-ink, var(--accent)); font: 600 11px/1.4 var(--label-font, inherit); }
 .fb-bpv-elabel.is-on, .fb-bpv-elabel:hover { background: var(--accent-soft); }
@@ -465,22 +466,34 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 .fb-bpv-zoom { display: inline-flex; align-items: center; gap: 2px; }
 .fb-bpv-zoom-n { min-width: 56px; font-variant-numeric: tabular-nums; }
 
-/* Side panel: hide, and dock left, right or bottom */
+/* Side panel: dock left, right or bottom (a dropdown); drag its inner edge to resize it; collapse it to a rail. */
 .fb-bpv-panel-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: var(--bw, 1px) solid var(--border); }
-.fb-bpv.no-panel { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-.fb-bpv[data-dock="left"] { grid-template-columns: 340px minmax(0, 1fr); }
-.fb-bpv[data-dock="left"] > .fb-bpv-panel { order: -1; border-left: 0; border-right: var(--bw, 1px) solid var(--border); }
-.fb-bpv[data-dock="bottom"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 38%); }
-.fb-bpv[data-dock="bottom"] > .fb-bpv-panel { border-left: 0; border-top: var(--bw, 1px) solid var(--border); }
-.fb-bpv.no-panel[data-dock] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.fb-bpv-dock { display: inline-flex; align-items: center; gap: 8px; }
+.fb-bpv[data-dock="left"] { grid-template-columns: var(--bpv-pw, 340px) minmax(0, 1fr); }
+.fb-bpv[data-dock="left"] > .fb-bpv-panel, .fb-bpv[data-dock="left"] > .fb-bpv-rail { order: -1; border-left: 0; border-right: var(--bw, 1px) solid var(--border); }
+.fb-bpv[data-dock="bottom"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) var(--bpv-ph, 280px); }
+.fb-bpv[data-dock="bottom"] > .fb-bpv-panel, .fb-bpv[data-dock="bottom"] > .fb-bpv-rail { border-left: 0; border-top: var(--bw, 1px) solid var(--border); }
+.fb-bpv-grip { position: absolute; z-index: 5; top: 0; bottom: 0; left: -3px; width: 8px; cursor: col-resize; touch-action: none; }
+.fb-bpv[data-dock="left"] .fb-bpv-grip { left: auto; right: -3px; }
+.fb-bpv[data-dock="bottom"] .fb-bpv-grip { top: -3px; bottom: auto; left: 0; right: 0; width: auto; height: 8px; cursor: row-resize; }
+.fb-bpv-grip::before { content: ""; position: absolute; inset: 0 3px; background: transparent; transition: background var(--t-hover) var(--ease); }
+.fb-bpv[data-dock="bottom"] .fb-bpv-grip::before { inset: 3px 0; }
+.fb-bpv-grip:hover::before, .fb-bpv-grip:focus-visible::before, .fb-bpv-grip.is-active::before { background: var(--accent-ink, var(--accent)); }
+.fb-bpv-grip:focus-visible { outline: none; }
+.fb-bpv-rail { display: flex; flex-direction: column; align-items: center; background: var(--surface); border-left: var(--bw, 1px) solid var(--border); }
+.fb-bpv[data-dock="bottom"] > .fb-bpv-rail { flex-direction: row; justify-content: flex-start; padding: 0 4px; }
+.fb-bpv-rail-btn { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; padding: 10px 0; border: 0; background: transparent; color: var(--muted); cursor: pointer;
+  font: 700 11px/1 var(--label-font, inherit); letter-spacing: .06em; text-transform: uppercase; }
+.fb-bpv-rail-btn > span { writing-mode: vertical-rl; }
+.fb-bpv[data-dock="bottom"] .fb-bpv-rail-btn { flex-direction: row; width: auto; height: 100%; padding: 0 10px; }
+.fb-bpv[data-dock="bottom"] .fb-bpv-rail-btn > span { writing-mode: horizontal-tb; }
+.fb-bpv-rail-btn:hover, .fb-bpv-rail-btn:focus-visible { color: var(--text); background: var(--surface2); }
+.fb-bpv-up { display: inline-flex; transform: rotate(180deg); }
 
-/* Spacing handles: thin bars in the middle of the gaps between rows and columns, shown when the page is hovered. */
-.fb-bpv-gap { position: absolute; z-index: 2; opacity: 0; transition: opacity var(--t-hover) var(--ease); }
-.fb-bpv-gap::before { content: ""; position: absolute; border-radius: 2px; background: var(--border-strong); }
-.fb-bpv-gap.is-row { left: 25%; right: 25%; height: 12px; bottom: calc(var(--gap-y, 10px) / -2 - 6px); cursor: row-resize; }
-.fb-bpv-gap.is-row::before { left: 0; right: 0; top: 5px; height: 2px; }
-.fb-bpv-gap.is-col { top: 50%; bottom: 0; width: 12px; right: calc(var(--gap-x, 10px) / -2 - 6px); cursor: col-resize; }
-.fb-bpv-gap.is-col::before { top: 0; bottom: 0; left: 5px; width: 2px; }
-.fb-bpv-node:hover .fb-bpv-gap, .fb-bpv-gap:focus-visible { opacity: .6; }
-.fb-bpv-gap:hover, .fb-bpv-gap:focus-visible { opacity: 1; }
-.fb-bpv-gap:hover::before, .fb-bpv-gap:focus-visible::before { background: var(--accent-ink, var(--accent)); }
+/* Block box resize corner: shown on hover, on keyboard focus and on the selected block */
+.fb-bpv-elsize { position: absolute; z-index: 4; right: 0; bottom: 0; width: 12px; height: 12px; padding: 0; border: 0; background: transparent; cursor: nwse-resize; opacity: 0; touch-action: none;
+  transition: opacity var(--t-hover) var(--ease); }
+.fb-bpv-elsize::before { content: ""; position: absolute; right: 3px; bottom: 3px; width: 5px; height: 5px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); }
+.fb-bpv-elw:hover .fb-bpv-elsize, .fb-bpv-elsize:focus-visible, .fb-bpv-elw:has(.is-selected) .fb-bpv-elsize { opacity: 1; }
+.fb-bpv-elsize:hover::before, .fb-bpv-elsize:focus-visible::before { border-color: var(--accent-ink, var(--accent)); }
+
