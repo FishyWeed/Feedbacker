@@ -15,10 +15,10 @@ RUN bun install --frozen-lockfile --production
 COPY server ./server
 COPY shared ./shared
 COPY --from=build /app/dist ./dist
-# No VOLUME line: Railway rejects it. The host attaches the data volume at /app/data (compose, fly.toml, Railway).
+# No VOLUME line: Railway rejects it. The host attaches the data volume at /app/data (compose, Railway).
 RUN mkdir -p /app/data && chown bun:bun /app/data
 EXPOSE 4200
-# Some hosts (Fly.io, Railway) mount the data volume owned by root. Start as root only to give the folder to the bun user,
+# Some hosts (Railway) mount the data volume owned by root. Start as root only to give the folder to the bun user,
 # then run the server as bun, without root rights.
 ENTRYPOINT ["/bin/sh", "-c", "chown -R bun:bun /app/data && exec setpriv --reuid=bun --regid=bun --init-groups -- \"$@\"", "sh"]
 CMD ["bun", "run", "server/index.ts"]

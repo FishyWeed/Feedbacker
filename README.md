@@ -121,7 +121,7 @@ Bun reads `.env` automatically. Never commit `.env`. Every setting is optional.
 |---|---|---|---|
 | `ADMIN_EMAIL` | No | – | The admin account's email. It sets the landing page look and gets the forms from older versions (see [Upgrade from a version with one owner](#upgrade-from-a-version-with-one-owner)). Without it, the first account is the admin. |
 | `SIGNUP` | No | `open` | `closed` stops new accounts. Existing accounts still sign in. |
-| `CLIENT_IP_HEADER` | Behind a proxy | – | The header your proxy sets to the visitor's address: `Fly-Client-IP` on Fly.io, `X-Real-IP` on Railway, `X-Forwarded-For` behind Caddy. Sign-in and sign-up limits count per address. |
+| `CLIENT_IP_HEADER` | Behind a proxy | – | The header your proxy sets to the visitor's address: `X-Real-IP` on Railway, `X-Forwarded-For` behind Caddy. Sign-in and sign-up limits count per address. |
 | `UPLOAD_LIMIT_MB` | No | `100` | Storage for uploaded images and videos per account. |
 | `PORT` | No | `4200` | HTTP port. |
 | `DATABASE_PATH` | No | `data/feedbacker.db` | Path of the SQLite file. The folder is made if it does not exist. Uploaded images go into an `uploads` folder next to it. |
@@ -138,9 +138,8 @@ hosts) cannot run Feedbacker.
 | Option | Best when | HTTPS |
 |---|---|---|
 | A: Docker on your own server | You have a server, or want the lowest cost and full control | You add Caddy (example below) |
-| B: Fly.io | You want a managed host and deploy from your computer with `fly deploy` | Included |
-| C: Railway | You want a managed host that deploys each push to GitHub | Included |
-| D: a plain server without Docker | You cannot use Docker | You add a reverse proxy |
+| B: Railway | You want a managed host that deploys each push to GitHub | Included |
+| C: a plain server without Docker | You cannot use Docker | You add a reverse proxy |
 
 ### Option A: Docker (recommended)
 
@@ -166,37 +165,7 @@ feedback.example.com {
 
 The proxy must send `X-Forwarded-Proto: https` (Caddy does this). The server then marks the session cookie `Secure`.
 
-### Option B: Fly.io
-
-The repository has a `fly.toml`: one machine, HTTPS, and a volume at `/app/data` for all data. One command makes the
-app, its data disk and its settings, then deploys. It never changes `fly.toml`, so you do not need to commit anything,
-and Fly's launch page and its pull request are not needed.
-
-**Warning:** Run exactly one machine. Each machine gets its own volume, so two machines would hold two different
-copies of your forms and responses. The script keeps one.
-
-1. Install `flyctl` (see [fly.io/docs/flyctl/install](https://fly.io/docs/flyctl/install/)) and sign in. Sign-in opens
-   your browser:
-   ```bash
-   fly auth login
-   ```
-2. In the repository folder (after `bun install`), run the script. Pick a unique app name and the region nearest to you
-   (`fly platform regions` lists them):
-   ```bash
-   bun run deploy:fly -- --app <app-name> --region <region> --admin-email <your email>
-   ```
-   It prints its plan first. Before it removes a machine that has no data disk (for example one made by Fly's launch
-   page), it asks you. Add `--signup closed` to stop new accounts after you made yours.
-3. Open `https://<app-name>.fly.dev/admin/signup` and create your account with the `--admin-email` address.
-
-To update, pull the new code and run the same command again; steps that are already done are skipped, and your data
-stays on the volume. If a step fails, the script says which one; fix it and run the command again.
-
-To back up, download the folder with `fly ssh sftp shell -a <app-name>` (`get /app/data/feedbacker.db`) or take a
-volume snapshot (`fly volumes snapshots`). For your own domain, run `fly certs add feedback.example.com -a <app-name>`
-and point its DNS at the app.
-
-### Option C: Railway
+### Option B: Railway
 
 Railway builds the `Dockerfile` from your GitHub repository on each push, so it deploys what is on GitHub, not what is
 on your computer.
@@ -219,7 +188,7 @@ rights. The Dockerfile has no `VOLUME` line on purpose, because Railway rejects 
 Render and similar platforms work the same way: build the `Dockerfile`, set the variables, expose port `4200`, and
 attach a persistent disk at `/app/data`.
 
-### Option D: a plain server without Docker
+### Option C: a plain server without Docker
 
 1. Install Bun 1.4+ on the server.
 2. Clone the repository, then run `bun install` and `bun run build`.
@@ -241,7 +210,7 @@ Every copy works the same way: the public website and your own server.
 - **Limits:** 5 new accounts per address per hour, and `UPLOAD_LIMIT_MB` of uploads per account. There is no limit on
   the number of forms or answers.
 
-**Warning:** Behind a proxy (Fly.io, Railway, Caddy), set `CLIENT_IP_HEADER`. Without it, every visitor shares the
+**Warning:** Behind a proxy (Railway, Caddy), set `CLIENT_IP_HEADER`. Without it, every visitor shares the
 proxy's address: 5 wrong passwords from anyone lock sign-in for everyone for 15 minutes, and only 5 accounts can be made
 per hour. Never set a header that your proxy does not overwrite, because visitors can send any value in it.
 
@@ -249,7 +218,7 @@ per hour. Never set a header that your proxy does not overwrite, because visitor
 
 Older versions had one owner, set with `ADMIN_USERNAME` and `ADMIN_PASSWORD` in `.env`. These settings are gone.
 
-1. Set `ADMIN_EMAIL` to your email (in `.env`, or as a secret on Fly.io or Railway).
+1. Set `ADMIN_EMAIL` to your email (in `.env`, or as a variable on Railway).
 2. Deploy the new version.
 3. Open `/admin/signup` and create the account for that email. Your forms, responses and dev mode look move to it.
 
@@ -278,7 +247,7 @@ shared/      Code that the server and the browser both use
 src/
   form/      Public form (FormView is also the editor preview)
   admin/     Dev mode: sign-in, form list, editor, inspector, share dialog, responses
-scripts/     dev.ts starts the two dev servers; deploy-fly.ts deploys to Fly.io in one command
+scripts/     dev.ts starts the two dev servers
 ```
 
 - **Data:** Each form is one JSON document in the `forms` table. Each response is one row in the `responses` table.

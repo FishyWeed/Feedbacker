@@ -67,7 +67,7 @@ export function createApp({ db, secret, uploadDir, fetchGitHub = fetch, signup =
   const smallBody = bodyLimit({ maxSize: 1024 * 1024, onError: tooLarge });
   app.use('/api/*', (c, next) => (c.req.path === '/api/uploads' ? next() : smallBody(c, next)));
 
-  // The socket address cannot be faked, unlike X-Forwarded-For. Behind a proxy (Fly.io, Railway, a VPS with Caddy) every
+  // The socket address cannot be faked, unlike X-Forwarded-For. Behind a proxy (Railway, a VPS with Caddy) every
   // visitor has the proxy's address, so the operator names the header that the proxy sets (CLIENT_IP_HEADER).
   const clientIp = (c: Context) => {
     const h = clientIpHeader && c.req.header(clientIpHeader)?.split(',')[0]?.trim();

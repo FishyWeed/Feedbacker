@@ -8,8 +8,7 @@
     "build": "bunx --bun vite build",
     "start": "bun run server/index.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "deploy:fly": "bun run scripts/deploy-fly.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "hono": "4.13.19"
