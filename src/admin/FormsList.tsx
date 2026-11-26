@@ -57,7 +57,7 @@ export async function signOut() {
 }
 
 /** Owner top bar. Sign out lives at the bottom of Settings. */
-/** Owner top bar. `ticker`: facts for the status ticker under it (Arcade and Paper dev themes only). */
+/** Owner top bar. `ticker`: facts for the status ticker in the page footer (Arcade and Paper dev themes only). */
 export function TopBar(props: { ticker?: string[] }) {
   return (
     <>
@@ -66,7 +66,7 @@ export function TopBar(props: { ticker?: string[] }) {
         <span class="fb-top-sp" />
         <Link href="/admin/settings" class="fb-btn fb-btn--secondary fb-btn--sm">Settings</Link>
       </header>
-      <Show when={showTicker() && props.ticker?.length}><Ticker items={props.ticker!} /></Show>
+      <Show when={showTicker() && props.ticker?.length}><div class="fb-ticker-foot"><Ticker items={props.ticker!} /></div></Show>
     </>
   );
 }

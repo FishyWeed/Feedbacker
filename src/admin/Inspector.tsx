@@ -1,7 +1,7 @@
 // The right panel (Inspector): settings for the selected block, section or the whole form.
 import { createMemo, createUniqueId, For, Index, Match, Show, Switch, type JSX } from 'solid-js';
 import { unwrap } from 'solid-js/store';
-import { questionsBefore } from '../../shared/logic';
+import { OP_LABELS, questionsBefore } from '../../shared/logic';
 import { isQuestion, KIND_LABELS, optionsOf, type Block, type Condition, type Op, type Rule, type Section } from '../../shared/schema';
 import { Icon } from '../ui/icons';
 import DesignSettings from './DesignSettings';
@@ -229,11 +229,6 @@ function BlockSettings(props: { block: Block }) {
 
 // --- Conditional logic ---
 
-const OP_LABELS: Record<Op, string> = {
-  equals: 'is', not_equals: 'is not', contains: 'contains', answered: 'is not empty',
-  not_answered: 'is empty', gt: 'is more than', lt: 'is less than',
-};
-
 function opsFor(q: Block | undefined): Op[] {
   switch (q?.kind) {
     case 'multi_choice': return ['contains', 'not_equals', 'answered', 'not_answered'];
@@ -256,7 +251,7 @@ function Sel(props: { label: string; value: string; onChange: (v: string) => voi
   );
 }
 
-function RuleEditor(props: { targetId: string; rule?: Rule; onChange: (r: Rule | undefined) => void; subject: 'question' | 'section' }) {
+export function RuleEditor(props: { targetId: string; rule?: Rule; onChange: (r: Rule | undefined) => void; subject: 'question' | 'section' }) {
   const ed = useEditor();
   const questions = createMemo(() => questionsBefore(ed.doc, props.targetId));
   const byId = (id: string) => questions().find((q) => q.id === id);

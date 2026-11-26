@@ -12,6 +12,7 @@ import { createDnd, type Dnd, type Source } from './dnd';
 import { createEditor, EditorContext, locate, useEditor, type Dir, type Editor as EditorState, type Movable, type PublishState } from './editorStore';
 import { flip, reducedMotion, settle, snapshot } from './motion';
 import { isNoopBlockMove, targetKey, type Target } from './moves';
+import Blueprint from './Blueprint';
 import DesignSettings from './DesignSettings';
 import Inspector from './Inspector';
 import { devTheme, showTicker } from './appearance';
@@ -40,7 +41,7 @@ export default function Editor(props: { id: string }) {
   );
 }
 
-type Mode = 'edit' | 'preview' | 'qr';
+type Mode = 'edit' | 'blueprint' | 'preview' | 'qr';
 
 function EditorView(props: { id: string; initial: FormDoc; state: PublishState }) {
   const ed = createEditor(props.id, props.initial, props.state);
@@ -124,7 +125,7 @@ function EditorView(props: { id: string; initial: FormDoc; state: PublishState }
           <span class="fb-divider-v" />
           <input class="fb-top-title" value={ed.doc.title} maxLength={200} aria-label="Form title" onInput={(e) => ed.actions.updateForm({ title: e.currentTarget.value })} />
           <Seg small label="Editor mode" value={mode()} onChange={setMode}
-            options={[{ value: 'edit', label: 'Edit', icon: 'pen' }, { value: 'preview', label: 'Preview', icon: 'eye' }, { value: 'qr', label: 'QR code', icon: 'qr' }]} />
+            options={[{ value: 'edit', label: 'Edit', icon: 'pen' }, { value: 'blueprint', label: 'Blueprint', icon: 'branch' }, { value: 'preview', label: 'Preview', icon: 'eye' }, { value: 'qr', label: 'QR code', icon: 'qr' }]} />
           <button class="fb-btn fb-btn--ghost fb-btn--sm" aria-pressed={mode() === 'preview' && themePanel()} onClick={openTheme}><Icon name="palette" size="sm" />Theme</button>
           <span class="fb-top-sp" />
           {/* A save error stays in view, so Retry is one click away. Otherwise the details show on hover or keyboard focus of "Status". */}
@@ -155,9 +156,9 @@ function EditorView(props: { id: string; initial: FormDoc; state: PublishState }
             <Show when={publishing()} fallback={<><Icon name="upload" size="sm" />Publish</>}><span class="fb-spin" aria-hidden="true" />Publishing…</Show>
           </button>
         </header>
-        {/* Status ticker (Arcade and Paper dev themes): the same facts as the Status panel and the canvas. */}
+        {/* Status ticker in the footer (Arcade and Paper dev themes): the same facts as the Status panel and the canvas. */}
         <Show when={showTicker()}>
-          <div data-dev-theme={devTheme()} style={{ flex: 'none' }}>
+          <div class="fb-ticker-foot" data-dev-theme={devTheme()}>
             <Ticker items={[
               `Draft: ${busy() ? 'Saving…' : ed.dirty() ? 'Unsaved changes' : 'Saved'}`,
               `Live: ${LIVE_WORDS[liveLevel()]}`,
@@ -168,6 +169,9 @@ function EditorView(props: { id: string; initial: FormDoc; state: PublishState }
           </div>
         </Show>
         <Switch>
+          <Match when={mode() === 'blueprint'}>
+            <Blueprint />
+          </Match>
           <Match when={mode() === 'qr'}>
             <div class="fb-stage" style={{ background: 'var(--bg)' }}><QrDesigner formId={props.id} /></div>
           </Match>

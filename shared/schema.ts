@@ -47,8 +47,8 @@ export type Block = {
 };
 export type Column = { id: string; blocks: Block[] };
 export type Row = { id: string; columns: Column[] };
-/** A section is one page of the form. */
-export type Section = { id: string; title?: string; showIf?: Rule; rows: Row[] };
+/** A section is one page of the form. `pos`: where its node sits in the editor's Blueprint view (owner only). */
+export type Section = { id: string; title?: string; showIf?: Rule; rows: Row[]; pos?: { x: number; y: number } };
 export type FormDoc = {
   title: string; description?: string; thankYou?: string; sections: Section[];
   theme?: FormTheme; background?: FormBackground; qr?: QrDesign; typography?: FormTypography;
@@ -97,6 +97,13 @@ const str = (x: unknown, max: number) => (typeof x === 'string' ? x.slice(0, max
 const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : undefined);
 const id = (x: unknown) => typeof x === 'string' && /^[\w-]{1,64}$/.test(x);
 
+/** A blueprint position: two finite numbers, rounded and kept in a sane range. */
+function parsePos(x: unknown): { x: number; y: number } | undefined {
+  if (!isObj(x) || num(x.x) === undefined || num(x.y) === undefined) return undefined;
+  const clamp = (n: number) => Math.round(Math.max(0, Math.min(20000, n)));
+  return { x: clamp(x.x), y: clamp(x.y) };
+}
+
 function parseRule(x: unknown): Rule | undefined {
   if (!isObj(x) || !Array.isArray(x.conditions)) return undefined;
   const conditions = x.conditions
@@ -139,7 +146,7 @@ export function parseFormDoc(x: unknown): FormDoc | null {
       }
       rows.push({ id: r.id, columns });
     }
-    sections.push({ id: s.id, title: str(s.title, 500), showIf: parseRule(s.showIf), rows });
+    sections.push({ id: s.id, title: str(s.title, 500), showIf: parseRule(s.showIf), rows, pos: parsePos(s.pos) });
   }
   // Ids are answer keys and drag-and-drop keys, so they must be unique.
   const ids = sections.flatMap((s) => [s.id, ...s.rows.flatMap((r) => [r.id, ...r.columns.flatMap((c) => [c.id, ...c.blocks.map((b) => b.id)])])]);

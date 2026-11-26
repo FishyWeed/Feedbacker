@@ -1,6 +1,6 @@
 // Conditional visibility, pages and answer checks.
 // The browser and the server use the same code, so the server never trusts the browser.
-import { blocksOf, isQuestion, optionsOf, otherLabelOf, type Answer, type Answers, type Block, type Condition, type FormDoc, type Rule, type Section } from './schema';
+import { blocksOf, isQuestion, KIND_LABELS, optionsOf, otherLabelOf, type Answer, type Answers, type Block, type Condition, type FormDoc, type Op, type Rule, type Section } from './schema';
 
 const isEmpty = (a: unknown) => a === undefined || a === null || a === '' || (Array.isArray(a) && a.length === 0);
 
@@ -163,4 +163,20 @@ export function questionsBefore(doc: FormDoc, targetId: string): Block[] {
         }
   }
   return out;
+}
+
+/** The words for each condition operator, as the owner reads them. */
+export const OP_LABELS: Record<Op, string> = {
+  equals: 'is', not_equals: 'is not', contains: 'contains', answered: 'is not empty',
+  not_answered: 'is empty', gt: 'is more than', lt: 'is less than',
+};
+
+/** One line for a rule, for example: If "Did you like it?" is "Yes" and "Score" is more than 3. */
+export function ruleText(rule: Rule, doc: FormDoc): string {
+  const name = (id: string) => {
+    for (const { block } of blocksOf(doc)) if (block.id === id) return `"${block.label?.trim() || KIND_LABELS[block.kind]}"`;
+    return 'a deleted question';
+  };
+  const one = (c: Condition) => `${name(c.q)} ${OP_LABELS[c.op]}${c.op === 'answered' || c.op === 'not_answered' ? '' : ` "${c.value ?? ''}"`}`;
+  return `If ${rule.conditions.map(one).join(rule.match === 'any' ? ' or ' : ' and ')}`;
 }

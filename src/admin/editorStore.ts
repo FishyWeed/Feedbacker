@@ -164,6 +164,8 @@ export function createEditor(formId: string, initial: FormDoc, initialState: Pub
       edit((d) => { d.sections = d.sections.filter((s) => s.id !== id); });
       if (selected() === id) select(null);
     },
+    /** Blueprint "Auto layout": forget every node position, so the nodes line up in page order again. */
+    clearPositions: () => edit((d) => { for (const s of d.sections) delete s.pos; }),
     addRow: (sectionId: string, columns: number) => edit((d) => { locate(d, sectionId)?.section.rows.push(newRow(columns)); }),
     removeRow: (rowId: string) => edit((d) => { const l = locate(d, rowId); if (l?.row) l.section.rows = l.section.rows.filter((r) => r.id !== rowId); }),
     /** Changes the column count. Blocks from removed columns move into the last column that stays. */

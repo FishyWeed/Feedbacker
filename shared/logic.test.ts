@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { checkAnswers, pagesOf, questionsBefore, visibleIds, visiblePages } from './logic';
+import { checkAnswers, pagesOf, questionsBefore, ruleText, visibleIds, visiblePages } from './logic';
 import { parseFormDoc, type Block, type FormDoc } from './schema';
 
 const q = (id: string, kind: Block['kind'], extra: Partial<Block> = {}): Block => ({ id, kind, label: id, ...extra });
@@ -68,4 +68,20 @@ test('"Other" accepts a typed answer only when it is on', () => {
   expect(checkAnswers(pick(true, 'single_choice'), { x: 'x'.repeat(501) }).ok).toBe(false);
   const r = checkAnswers(pick(true, 'single_choice'), { x: '   ' });
   expect(r.ok === false && r.errors.x).toBe('Choose an option, or choose "Other" and type your answer.');
+});
+
+test('ruleText: one readable line for a rule; a deleted question says so', () => {
+  const d = doc;
+  expect(ruleText({ match: 'all', conditions: [{ q: 'likes', op: 'equals', value: 'Yes' }] }, d)).toBe('If "likes" is "Yes"');
+  expect(ruleText({ match: 'any', conditions: [{ q: 'likes', op: 'answered' }, { q: 'gone', op: 'gt', value: 3 }] }, d))
+    .toBe('If "likes" is not empty or a deleted question is more than "3"');
+});
+
+test('parseFormDoc keeps a valid blueprint position, rounds and clamps it, and drops a bad one', () => {
+  const base = { title: 't', sections: [{ id: 's1', rows: [{ id: 'r1', columns: [{ id: 'c1', blocks: [] }] }] }] };
+  const at = (pos: unknown) => parseFormDoc({ ...base, sections: [{ ...base.sections[0], pos }] })!.sections[0]!.pos;
+  expect(at({ x: 120.6, y: 40 })).toEqual({ x: 121, y: 40 });
+  expect(at({ x: -5, y: 1e9 })).toEqual({ x: 0, y: 20000 });
+  expect(at({ x: 'a', y: 1 })).toBeUndefined();
+  expect(at(undefined)).toBeUndefined();
 });

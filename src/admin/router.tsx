@@ -10,7 +10,7 @@ export let leaveGuard: (() => boolean) | null = null;
 export const setLeaveGuard = (g: typeof leaveGuard) => (leaveGuard = g);
 
 /** One-time hints for the next page, passed in memory so the URL stays clean (for example: open the QR tab). */
-export const handoff: { editorMode: 'edit' | 'preview' | 'qr' | null } = { editorMode: null };
+export const handoff: { editorMode: 'edit' | 'blueprint' | 'preview' | 'qr' | null } = { editorMode: null };
 
 export function navigate(to: string) {
   if (leaveGuard && !leaveGuard()) return;
