@@ -165,6 +165,8 @@ export function createEditor(formId: string, initial: FormDoc, initialState: Pub
       edit((d) => { d.sections.push(s); });
       select(s.id);
     },
+    updateRow: (id: string, patch: Partial<Row>) =>
+      edit((d) => { const l = locate(d, id); if (l?.row && !l.column) Object.assign(l.row, patch); }, `r:${id}:${Object.keys(patch).join()}`),
     updateSection: (id: string, patch: Partial<Section>) =>
       edit((d) => { const l = locate(d, id); if (l && !l.row) Object.assign(l.section, patch); }, `s:${id}:${Object.keys(patch).join()}`),
     removeSection(id: string) {

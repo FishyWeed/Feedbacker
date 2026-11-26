@@ -105,6 +105,10 @@ test('parseFormDoc keeps blueprint sizes and line bends, clamped, and drops bad 
   const box = (size: unknown) => doc({}, { size }).sections[0]!.rows[0]!.columns[0]!.blocks[0]!.size;
   expect(box({ w: 10, h: 33.6 })).toEqual({ w: 80, h: 34 });
   expect(box({ w: 300 })).toBeUndefined();
+  const space = (v: unknown) => parseFormDoc({ title: 't', sections: [{ id: 's1', rows: [{ id: 'r1', space: v, columns: [{ id: 'c1', blocks: [] }] }] }] })!.sections[0]!.rows[0]!.space;
+  expect(space(-5)).toBe(0);
+  expect(space(999.4)).toBe(400);
+  expect(space('x')).toBeUndefined();
   const b = doc({}, { bends: { q1: { x: 10.4, y: -20 }, 'bad id!': { x: 1, y: 1 }, q2: 'nope' } }).sections[0]!.rows[0]!.columns[0]!.blocks[0]!;
   expect(b.bends).toEqual({ q1: { x: 10, y: -20 } });
 });

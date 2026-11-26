@@ -50,7 +50,8 @@ export type Block = {
   size?: { w: number; h: number };
 };
 export type Column = { id: string; blocks: Block[] };
-export type Row = { id: string; columns: Column[] };
+/** `space`: Blueprint view only, extra room above the row, 0 to 400. */
+export type Row = { id: string; columns: Column[]; space?: number };
 /**
  * A section is one page of the form. Blueprint view only (owner, never shown to visitors): `pos` is where its node
  * sits, `bend` moves the middle of the line that leads into it, `size` is its width and minimum height.
@@ -167,7 +168,7 @@ export function parseFormDoc(x: unknown): FormDoc | null {
         if (blocks.includes(null)) return null;
         columns.push({ id: c.id, blocks: blocks as Block[] });
       }
-      rows.push({ id: r.id, columns });
+      rows.push({ id: r.id, columns, space: num(r.space) === undefined ? undefined : Math.round(Math.max(0, Math.min(400, r.space))) });
     }
     sections.push({ id: s.id, title: str(s.title, 500), showIf: parseRule(s.showIf), rows, pos: parsePos(s.pos), bend: parsePos(s.bend), size: parseSize(s.size, 200) });
   }

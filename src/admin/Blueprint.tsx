@@ -6,7 +6,8 @@
 //   Ctrl +/-/0 or the toolbar zoom. "Center" brings the pages back.
 // - Nodes: drag by the header, or arrow keys; resize from the corner. Lines (page lines and condition lines between
 //   elements): drag the middle (label or "+") to bend; double-click to straighten.
-// - Blocks: resize a block's box from its corner. A page grows to fit its boxes.
+// - Blocks: resize a block's box from its corner; it stops at the page border. Drag a row's dot (the page's left side)
+//   up or down to add room above that row.
 // - The side panel docks left, right or bottom, resizes from its inner edge and collapses to a rail (all remembered
 //   in this browser).
 // - Question ports: click the dot beside a question, pick an answer, then pull the wire to a later question or page:
@@ -74,6 +75,7 @@ export default function Blueprint() {
   const [sizeDrag, setSizeDrag] = createSignal<{ id: string; w: number; h: number } | null>(null);
   const [elemBend, setElemBend] = createSignal<{ key: string; x: number; y: number } | null>(null);
   const [boxDrag, setBoxDrag] = createSignal<{ id: string; w: number; h: number } | null>(null);
+  const [rowDrag, setRowDrag] = createSignal<{ id: string; v: number } | null>(null);
   const [drag, setDrag] = createSignal<{ id: string; x: number; y: number } | null>(null);
   const [bendDrag, setBendDrag] = createSignal<{ id: string; x: number; y: number } | null>(null);
   const [menu, setMenu] = createSignal<Menu | null>(null);
@@ -244,12 +246,20 @@ export default function Blueprint() {
   // --- Resizing a block's box: drag its corner, arrow keys on the corner, double-click resets. ---
   /** The box's size now, measured (unscaled layout pixels, so the zoom does not change it). */
   const boxNow = (b: Block, corner: HTMLElement) => { const el = corner.previousElementSibling as HTMLElement; return boxOf(b) ?? { w: el.offsetWidth, h: el.offsetHeight }; };
-  const clampBox = (w: number, h: number) => ({ w: Math.round(Math.max(BOX_MIN_W, Math.min(1200, w))), h: Math.round(Math.max(BOX_MIN_H, Math.min(4000, h))) });
+  /** The widest the box can be inside its page as the page is now: a box stops at the page border; it never pushes it. */
+  const boxMaxW = (b: Block) => {
+    const l = locate(ed.doc, b.id);
+    if (!l?.row || !l.column) return 1200;
+    const others = l.row.columns.reduce((t, c) => (c.id === l.column!.id ? t : t + Math.max(BOX_MIN_W, ...c.blocks.map((x) => boxOf(x)?.w ?? 0))), 0);
+    return widthOf(l.section) - FLOW_PAD - others - (l.row.columns.length - 1) * BOX_GAP;
+  };
+  const clampBox = (w: number, h: number, maxW: number) => ({ w: Math.round(Math.max(BOX_MIN_W, Math.min(maxW, w))), h: Math.round(Math.max(BOX_MIN_H, Math.min(4000, h))) });
   function pressBox(b: Block, e: PointerEvent) {
     if (e.button !== 0 || wire()) return;
     e.stopPropagation();
     const s0 = boxNow(b, e.currentTarget as HTMLElement);
-    dragBy(e, (dx, dy) => setBoxDrag({ id: b.id, ...clampBox(s0.w + dx, s0.h + dy) }), (moved) => {
+    const maxW = boxMaxW(b); // fixed for the whole drag, so the page cannot grow under the pointer
+    dragBy(e, (dx, dy) => setBoxDrag({ id: b.id, ...clampBox(s0.w + dx, s0.h + dy, maxW) }), (moved) => {
       const d = boxDrag();
       if (moved && d) { ed.actions.updateBlock(b.id, { size: { w: d.w, h: d.h } }); eatNextClick(); }
       setBoxDrag(null);
@@ -261,7 +271,27 @@ export default function Blueprint() {
     e.preventDefault();
     const step = e.shiftKey ? 24 : 8;
     const s0 = boxNow(b, e.currentTarget as HTMLElement);
-    ed.actions.updateBlock(b.id, { size: clampBox(s0.w + a.x * step, s0.h + a.y * step) });
+    ed.actions.updateBlock(b.id, { size: clampBox(s0.w + a.x * step, s0.h + a.y * step, boxMaxW(b)) });
+  }
+
+  // --- Room above a row: drag the page's left side at that row (its dot) up or down, arrow keys, double-click resets. ---
+  const spaceOf = (r: Row) => { const d = rowDrag(); return d?.id === r.id ? d.v : r.space ?? 0; };
+  const clampSpace = (n: number) => Math.round(Math.max(0, Math.min(400, n)));
+  function pressRow(r: Row, e: PointerEvent) {
+    if (e.button !== 0 || wire()) return;
+    e.stopPropagation();
+    const v0 = spaceOf(r);
+    dragBy(e, (_dx, dy) => setRowDrag({ id: r.id, v: clampSpace(v0 + dy) }), (moved) => {
+      const d = rowDrag();
+      if (moved && d) { ed.actions.updateRow(r.id, { space: d.v || undefined }); eatNextClick(); }
+      setRowDrag(null);
+    });
+  }
+  function keyRow(r: Row, e: KeyboardEvent) {
+    const a = ARROWS[e.key];
+    if (!a?.y) return;
+    e.preventDefault();
+    ed.actions.updateRow(r.id, { space: clampSpace(spaceOf(r) + a.y * (e.shiftKey ? 24 : 8)) || undefined });
   }
 
   function keyResize(s: Section, e: KeyboardEvent) {
@@ -424,7 +454,7 @@ export default function Blueprint() {
   // --- Lines between elements: from a question's dot to each element whose rule uses it. Blocks size themselves, so
   // their ends are measured from the page (in board coordinates, so panning does not change them). ---
   const [chips, setChips] = createSignal<Record<string, { l: Pt; r: Pt }>>({});
-  const layoutKey = createMemo(() => JSON.stringify(ed.doc.sections.map((s) => s.rows.map((r) => r.columns.map((c) => c.blocks.map((b) => [b.id, b.label, !!b.showIf, b.size?.w, b.size?.h]))))));
+  const layoutKey = createMemo(() => JSON.stringify(ed.doc.sections.map((s) => s.rows.map((r) => r.columns.map((c) => [r.space, c.blocks.map((b) => [b.id, b.label, !!b.showIf, b.size?.w, b.size?.h])])))));
   function measureChips() {
     const out: Record<string, { l: Pt; r: Pt }> = {};
     for (const el of stage.querySelectorAll<HTMLElement>('[data-bpv-block]')) {
@@ -433,7 +463,7 @@ export default function Blueprint() {
     }
     setChips(out);
   }
-  createEffect(() => { positions(); heights(); layoutKey(); ed.doc.sections.map(widthOf); boxDrag(); queueMicrotask(measureChips); });
+  createEffect(() => { positions(); heights(); layoutKey(); ed.doc.sections.map(widthOf); boxDrag(); rowDrag(); queueMicrotask(measureChips); });
   const SHORT: Record<string, (v: string) => string> = {
     equals: (v) => `"${v}"`, not_equals: (v) => `not "${v}"`, contains: (v) => `has "${v}"`, gt: (v) => `> ${v}`, lt: (v) => `< ${v}`,
     answered: () => 'answered', not_answered: () => 'not answered',
@@ -575,7 +605,11 @@ export default function Blueprint() {
                   <Show when={s.rows.some((r) => r.columns.some((c) => c.blocks.length))} fallback={<p class="fb-bpv-empty">No blocks yet</p>}>
                     <For each={s.rows}>
                       {(r) => (
-                        <div class="fb-bpv-row" style={{ 'grid-template-columns': rowCols(r) }}>
+                        <div class="fb-bpv-row" style={{ 'grid-template-columns': rowCols(r), 'margin-top': spaceOf(r) ? `${spaceOf(r)}px` : undefined }}>
+                          <span class="fb-bpv-rowgrip" classList={{ 'is-active': rowDrag()?.id === r.id }} role="separator" aria-orientation="horizontal" tabIndex={0}
+                            aria-label="Room above this row. Drag up or down, or use the arrow keys; double-click resets." aria-valuenow={spaceOf(r)}
+                            title="Drag up or down: room above this row · Double-click resets"
+                            onPointerDown={(e) => pressRow(r, e)} onKeyDown={(e) => keyRow(r, e)} onDblClick={() => ed.actions.updateRow(r.id, { space: undefined })} />
                           <For each={r.columns}>
                             {(c) => (
                               <div class="fb-bpv-col">
