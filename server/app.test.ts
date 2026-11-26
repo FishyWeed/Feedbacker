@@ -7,19 +7,21 @@ import { join } from 'node:path';
 
 const uploadDir = join(mkdtempSync(join(tmpdir(), 'feedbacker-')), 'uploads');
 
-const app = createApp({ db: openDb(':memory:'), username: 'owner', password: 'correct-horse', secret: 'test-secret', uploadDir });
+const app = createApp({ db: openDb(':memory:'), secret: 'test-secret', uploadDir });
 const call = (path: string, init: { method?: string; body?: unknown; cookie?: string } = {}) =>
   app.request(path, {
     method: init.method ?? 'GET',
     headers: { 'content-type': 'application/json', ...(init.cookie ? { cookie: init.cookie } : {}) },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
   });
+// The first account on this server: with no ADMIN_EMAIL, it is the admin (it sets the landing page look).
+expect((await call('/api/signup', { method: 'POST', body: { email: 'owner@example.com', password: 'correct-horse' } })).status).toBe(201);
 
 test('owner flow: sign in, build a form, collect a response', async () => {
   expect((await call('/api/forms')).status).toBe(401);
-  expect((await call('/api/login', { method: 'POST', body: { username: 'owner', password: 'wrong' } })).status).toBe(401);
+  expect((await call('/api/login', { method: 'POST', body: { email: 'owner@example.com', password: 'wrong' } })).status).toBe(401);
 
-  const login = await call('/api/login', { method: 'POST', body: { username: 'owner', password: 'correct-horse' } });
+  const login = await call('/api/login', { method: 'POST', body: { email: 'owner@example.com', password: 'correct-horse' } });
   expect(login.status).toBe(200);
   const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
   expect(login.headers.get('set-cookie')).toContain('HttpOnly');
@@ -67,7 +69,7 @@ test('image upload: owner only, real images only, served back', async () => {
   const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
   expect((await upload(png)).status).toBe(401);
 
-  const login = await call('/api/login', { method: 'POST', body: { username: 'owner', password: 'correct-horse' } });
+  const login = await call('/api/login', { method: 'POST', body: { email: 'owner@example.com', password: 'correct-horse' } });
   const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
   // A text file with a .png name and an image/png type is still rejected.
   expect((await upload(new TextEncoder().encode('<script>alert(1)</script>'), cookie)).status).toBe(400);
@@ -97,7 +99,7 @@ test('image upload: owner only, real images only, served back', async () => {
 
 test('dev settings: owner only, unknown values fall back to defaults', async () => {
   expect((await call('/api/settings')).status).toBe(401);
-  const login = await call('/api/login', { method: 'POST', body: { username: 'owner', password: 'correct-horse' } });
+  const login = await call('/api/login', { method: 'POST', body: { email: 'owner@example.com', password: 'correct-horse' } });
   const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
   const saved = await (await call('/api/settings', { method: 'PUT', cookie, body: { devTheme: 'arcade', mode: 'dark', fonts: { ui: 'press-start-2p', heading: 'silkscreen', label: 'space-mono' } } })).json();
   // A pixel font is never offered for body text, so it falls back to System UI.
@@ -107,8 +109,8 @@ test('dev settings: owner only, unknown values fall back to defaults', async () 
 
 test('landing page look: Paper by default, public read, owner-only change', async () => {
   const landing = async () => (await (await call('/api/site')).json()).landing;
-  expect(await (await call('/api/site')).json()).toEqual({ mode: 'single', landing: 'paper' });
-  const login = await call('/api/login', { method: 'POST', body: { username: 'owner', password: 'correct-horse' } });
+  expect(await (await call('/api/site')).json()).toEqual({ signup: true, landing: 'paper' });
+  const login = await call('/api/login', { method: 'POST', body: { email: 'owner@example.com', password: 'correct-horse' } });
   const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
   await call('/api/settings', { method: 'PUT', cookie, body: { landing: 'arcade' } });
   expect(await landing()).toBe('arcade');
@@ -120,25 +122,37 @@ test('a forged session cookie is rejected', async () => {
   expect((await call('/api/me', { cookie: `feedbacker_session=0.0.${Date.now() + 1e9}` })).status).toBe(401);
 });
 
-test('single mode: no sign-up and no account routes', async () => {
-  expect((await call('/api/signup', { method: 'POST', body: { email: 'a@b.co', password: 'password1' } })).status).toBe(404);
-  const login = await call('/api/login', { method: 'POST', body: { username: 'owner', password: 'correct-horse' } });
-  const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
-  expect(await (await call('/api/me', { cookie })).json()).toEqual({ mode: 'single', admin: true });
-  expect((await call('/api/account', { method: 'DELETE', cookie, body: { password: 'correct-horse' } })).status).toBe(404);
+test('closed sign-up; without ADMIN_EMAIL the first account is admin but never takes old forms', async () => {
+  const db = openDb(':memory:');
+  db.query("INSERT INTO forms (id, doc, created_at, updated_at) VALUES ('oldform001', '{\"title\":\"Old\",\"sections\":[]}', 1, 1)").run();
+  const open = createApp({ db, secret: 's', uploadDir });
+  const signup = (a: typeof open, email: string) =>
+    a.request('/api/signup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password: 'password1' }) });
+  const first = (await signup(open, 'first@example.com')).headers.get('set-cookie')!.split(';')[0]!;
+  const second = (await signup(open, 'second@example.com')).headers.get('set-cookie')!.split(';')[0]!;
+  expect(await (await open.request('/api/me', { headers: { cookie: first } })).json()).toEqual({ email: 'first@example.com', admin: true });
+  expect(await (await open.request('/api/me', { headers: { cookie: second } })).json()).toEqual({ email: 'second@example.com', admin: false });
+  expect((await open.request('/api/forms/oldform001', { headers: { cookie: first } })).status).toBe(404);
+
+  const closed = createApp({ db, secret: 's', uploadDir, signup: false });
+  expect(await (await closed.request('/api/site')).json()).toMatchObject({ signup: false });
+  expect((await signup(closed, 'third@example.com')).status).toBe(403);
+  // Existing accounts still sign in.
+  const login = await closed.request('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'first@example.com', password: 'password1' }) });
+  expect(login.status).toBe(200);
 });
 
-test('hosted mode: sign up, private forms, admin takes over old forms, storage limit, password change, delete account', async () => {
+test('accounts: sign up, private forms, admin takes over old forms, storage limit, password change, delete account', async () => {
   const db = openDb(':memory:');
   // A form made in single mode before the switch (owner 0).
   db.query("INSERT INTO forms (id, doc, created_at, updated_at) VALUES ('oldform001', '{\"title\":\"Old\",\"sections\":[]}', 1, 1)").run();
   const dir = join(mkdtempSync(join(tmpdir(), 'feedbacker-')), 'uploads');
-  const h = createApp({ db, secret: 's', uploadDir: dir, mode: 'hosted', adminEmail: 'Boss@Example.com', uploadLimitMb: 0.0001 });
+  const h = createApp({ db, secret: 's', uploadDir: dir, adminEmail: 'Boss@Example.com', uploadLimitMb: 0.0001 });
   const req = (path: string, init: { method?: string; body?: unknown; cookie?: string } = {}) =>
     h.request(path, { method: init.method ?? 'GET', headers: { 'content-type': 'application/json', ...(init.cookie ? { cookie: init.cookie } : {}) }, body: init.body === undefined ? undefined : JSON.stringify(init.body) });
   const cookieOf = (r: Response) => r.headers.get('set-cookie')!.split(';')[0]!;
 
-  expect(await (await req('/api/site')).json()).toMatchObject({ mode: 'hosted' });
+  expect(await (await req('/api/site')).json()).toMatchObject({ signup: true });
   // Bad input, then a new account, then the same email again.
   const bad = await req('/api/signup', { method: 'POST', body: { email: 'nope', password: 'short' } });
   expect(bad.status).toBe(400);
@@ -147,9 +161,7 @@ test('hosted mode: sign up, private forms, admin takes over old forms, storage l
   expect(a.status).toBe(201);
   const ann = cookieOf(a);
   expect((await req('/api/signup', { method: 'POST', body: { email: 'ann@example.com', password: 'other-password' } })).status).toBe(409);
-  expect(await (await req('/api/me', { cookie: ann })).json()).toEqual({ mode: 'hosted', email: 'ann@example.com', admin: false });
-  // The single-mode owner login does not exist here.
-  expect((await req('/api/login', { method: 'POST', body: { username: 'owner', password: 'correct-horse' } })).status).toBe(401);
+  expect(await (await req('/api/me', { cookie: ann })).json()).toEqual({ email: 'ann@example.com', admin: false });
 
   // Ann's form is private: Bob can neither list, read, change, publish nor delete it.
   const { id } = await (await req('/api/forms', { method: 'POST', body: { title: 'Ann form' }, cookie: ann })).json();
@@ -202,20 +214,20 @@ test('hosted mode: sign up, private forms, admin takes over old forms, storage l
 });
 
 test('too many failed logins are blocked', async () => {
-  const a = createApp({ db: openDb(':memory:'), username: 'u', password: 'password1', secret: 's', uploadDir });
-  const bad = () => a.request('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"username":"u","password":"x"}' });
+  const a = createApp({ db: openDb(':memory:'), secret: 's', uploadDir });
+  const bad = () => a.request('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"email":"u@example.com","password":"x"}' });
   for (let i = 0; i < 5; i++) expect((await bad()).status).toBe(401);
   expect((await bad()).status).toBe(429);
 });
 
 test('star count: asked from GitHub once, then cached; null when GitHub fails', async () => {
   let calls = 0;
-  const ok = createApp({ db: openDb(':memory:'), username: 'u', password: 'password1', secret: 's', uploadDir,
+  const ok = createApp({ db: openDb(':memory:'), secret: 's', uploadDir,
     fetchGitHub: (async () => { calls++; return Response.json({ stargazers_count: 42 }); }) as unknown as typeof fetch });
   expect(await (await ok.request('/api/stars')).json()).toEqual({ stars: 42 });
   expect(await (await ok.request('/api/stars')).json()).toEqual({ stars: 42 });
   expect(calls).toBe(1);
-  const down = createApp({ db: openDb(':memory:'), username: 'u', password: 'password1', secret: 's', uploadDir,
+  const down = createApp({ db: openDb(':memory:'), secret: 's', uploadDir,
     fetchGitHub: (async () => { throw new Error('offline'); }) as unknown as typeof fetch });
   expect(await (await down.request('/api/stars')).json()).toEqual({ stars: null });
 });

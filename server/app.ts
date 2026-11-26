@@ -1,5 +1,4 @@
 import type { Database } from 'bun:sqlite';
-import { timingSafeEqual } from 'node:crypto';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { Hono, type Context } from 'hono';
@@ -14,15 +13,14 @@ import { REPO_SLUG } from '../shared/repo';
 import { newForm, parseFormDoc, type FormDoc } from '../shared/schema';
 
 /**
- * Two modes, one app:
- * - `single` (default, for self-hosting): one owner, whose username and password are in .env.
- * - `hosted` (a public website): anyone signs up with an email and a password and sees only their own forms.
- *   `adminEmail` is the site owner's account: it sets the landing page look and takes over the forms made in single mode.
+ * Accounts: people sign up with an email and a password, and each account sees only its own forms.
+ * `signup: false` closes sign-up (existing accounts still sign in). The admin sets the landing page look: the
+ * `adminEmail` account, or the first account if `adminEmail` is not set. Only the `adminEmail` account takes over the
+ * forms made by older versions, which had one owner from .env.
  */
 type Options = {
   db: Database; secret: string; uploadDir: string; fetchGitHub?: typeof fetch;
-  mode?: 'single' | 'hosted'; username?: string; password?: string;
-  adminEmail?: string; uploadLimitMb?: number; clientIpHeader?: string;
+  signup?: boolean; adminEmail?: string; uploadLimitMb?: number; clientIpHeader?: string;
 };
 type Env = { Variables: { uid: number } };
 
@@ -49,8 +47,6 @@ const MAX_SIGNUPS = 5; // per address per hour
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 200;
 
-const sha256 = (s: string) => new Bun.CryptoHasher('sha256').update(s).digest();
-const same = (a: string, b: string) => timingSafeEqual(sha256(a), sha256(b));
 const str = (x: unknown) => (typeof x === 'string' ? x : '');
 /** A plain check only: there is no confirmation email, so the address is never proven. */
 const normEmail = (x: unknown) => { const e = str(x).trim().toLowerCase(); return e.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : null; };
@@ -64,8 +60,7 @@ const newId = () => Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) =
 const isHttps = (c: Context) => c.req.url.startsWith('https:') || c.req.header('x-forwarded-proto') === 'https';
 const readJson = (c: Context) => c.req.json().catch(() => null);
 
-export function createApp({ db, secret, uploadDir, fetchGitHub = fetch, mode = 'single', username = '', password = '', adminEmail, uploadLimitMb = 100, clientIpHeader }: Options) {
-  const hosted = mode === 'hosted';
+export function createApp({ db, secret, uploadDir, fetchGitHub = fetch, signup = true, adminEmail, uploadLimitMb = 100, clientIpHeader }: Options) {
   const app = new Hono<Env>();
   app.use('*', secureHeaders());
   const tooLarge = (c: Context) => c.json({ error: 'Request is too large.' }, 413);
@@ -96,17 +91,24 @@ export function createApp({ db, secret, uploadDir, fetchGitHub = fetch, mode = '
   const getPublished = (id: string) => parse(row(id)?.published ?? null);
 
   // --- Accounts and sessions ---
-  // The cookie holds "user id.version.expiry", signed. User 0 is the single owner from .env.
+  // The cookie holds "user id.version.expiry", signed.
   type User = { id: number; email: string; pass: string; ver: number };
   const userById = (id: number) => db.query<User, [number]>('SELECT id, email, pass, ver FROM users WHERE id = ?').get(id);
-  const isAdmin = (uid: number) => !hosted || (!!adminEmail && userById(uid)?.email === adminEmail.trim().toLowerCase());
+  const admin = adminEmail?.trim().toLowerCase();
+  const firstUser = () => db.query<{ id: number }, []>('SELECT MIN(id) AS id FROM users').get()?.id;
+  const isAdmin = (uid: number) => (admin ? userById(uid)?.email === admin : uid === firstUser());
   async function startSession(c: Context, uid: number, ver: number) {
     await setSignedCookie(c, COOKIE, `${uid}.${ver}.${Date.now() + SESSION_SECONDS * 1000}`, secret, {
       httpOnly: true, sameSite: 'Strict', path: '/', maxAge: SESSION_SECONDS, secure: isHttps(c),
     });
   }
-  /** The site owner's account takes over forms made before hosted mode was turned on. */
-  const claimOldForms = (uid: number) => { if (hosted && isAdmin(uid)) db.query('UPDATE forms SET owner = ? WHERE owner = 0').run(uid); };
+  /** Forms from older versions (owner 0, the one owner from .env) go to the ADMIN_EMAIL account only, never to a stranger. */
+  const claimOldForms = (uid: number) => {
+    if (!admin || userById(uid)?.email !== admin) return;
+    db.query('UPDATE forms SET owner = ? WHERE owner = 0').run(uid);
+    // The old owner's dev mode look comes along, unless this account already has its own.
+    db.query("INSERT OR IGNORE INTO settings (key, value) SELECT ?, value FROM settings WHERE key = 'dev'").run(`dev:${uid}`);
+  };
   // A login for an unknown email still checks a password, so the response time does not show which emails exist.
   let dummyHash = '';
   const checkPassword = async (p: string, hash: string | undefined) => {
@@ -120,7 +122,7 @@ export function createApp({ db, secret, uploadDir, fetchGitHub = fetch, mode = '
   const fails = new Map<string, { n: number; until: number }>();
   const signups = new Map<string, { n: number; until: number }>();
 
-  app.get('/api/site', (c) => c.json({ mode, landing: getLanding() }));
+  app.get('/api/site', (c) => c.json({ signup, landing: getLanding() }));
 
   app.post('/api/login', async (c) => {
     const ip = clientIp(c);
@@ -128,18 +130,12 @@ export function createApp({ db, secret, uploadDir, fetchGitHub = fetch, mode = '
     const f = fails.get(ip);
     if (f && f.until > now && f.n >= MAX_FAILS) return c.json({ error: 'Too many attempts. Try again in 15 minutes.' }, 429);
     const body = await readJson(c);
-    let user: { id: number; ver: number } | null = null;
-    if (hosted) {
-      const email = normEmail(body?.email);
-      const u = email ? db.query<User, [string]>('SELECT id, email, pass, ver FROM users WHERE email = ?').get(email) : null;
-      if ((await checkPassword(str(body?.password), u?.pass)) && u) user = u;
-    } else {
-      // Check both values every time, so the response time does not show which one was wrong.
-      if ([same(str(body?.username), username), same(str(body?.password), password)].every(Boolean)) user = { id: 0, ver: 0 };
-    }
+    const email = normEmail(body?.email);
+    const u = email ? db.query<User, [string]>('SELECT id, email, pass, ver FROM users WHERE email = ?').get(email) : null;
+    const user = (await checkPassword(str(body?.password), u?.pass)) ? u : null;
     if (!user) {
       fails.set(ip, { n: (f && f.until > now ? f.n : 0) + 1, until: now + LOCK_MS });
-      return c.json({ error: hosted ? 'Wrong email or password.' : 'Wrong username or password.' }, 401);
+      return c.json({ error: 'Wrong email or password.' }, 401);
     }
     fails.delete(ip);
     claimOldForms(user.id);
@@ -148,7 +144,7 @@ export function createApp({ db, secret, uploadDir, fetchGitHub = fetch, mode = '
   });
 
   app.post('/api/signup', async (c) => {
-    if (!hosted) return c.json({ error: 'This server has one owner. Sign-up is off.' }, 404);
+    if (!signup) return c.json({ error: 'Sign-up is closed on this server. Ask its owner for an account.' }, 403);
     const ip = clientIp(c);
     const now = Date.now();
     const s = signups.get(ip);
@@ -181,19 +177,18 @@ export function createApp({ db, secret, uploadDir, fetchGitHub = fetch, mode = '
   const owner = createMiddleware<Env>(async (c, next) => {
     const m = /^(\d+)\.(\d+)\.(\d+)$/.exec((await getSignedCookie(c, secret, COOKIE)) || '');
     const uid = Number(m?.[1]);
-    const ok = !!m && Number(m[3]) > Date.now() && (hosted ? userById(uid)?.ver === Number(m[2]) : uid === 0);
+    const ok = !!m && Number(m[3]) > Date.now() && userById(uid)?.ver === Number(m[2]);
     if (!ok) return c.json({ error: 'Not signed in.' }, 401);
     c.set('uid', uid);
     await next();
   });
   for (const p of ['/api/me', '/api/account', '/api/account/*', '/api/forms', '/api/forms/*', '/api/uploads', '/api/settings']) app.use(p, owner);
 
-  /** Who is signed in: the mode, the email (hosted mode) and whether this account sets the landing page. */
-  app.get('/api/me', (c) => { const uid = c.get('uid'); return c.json({ mode, email: hosted ? userById(uid)?.email : undefined, admin: isAdmin(uid) }); });
+  /** Who is signed in, and whether this account sets the landing page. */
+  app.get('/api/me', (c) => { const uid = c.get('uid'); return c.json({ email: userById(uid)?.email, admin: isAdmin(uid) }); });
 
-  // --- Hosted mode: change the password, delete the account. In single mode the password lives in .env. ---
+  // --- Account: change the password, delete the account ---
   app.put('/api/account/password', async (c) => {
-    if (!hosted) return c.json({ error: 'Change ADMIN_PASSWORD in .env, then restart the server.' }, 404);
     const u = userById(c.get('uid'))!;
     const body = await readJson(c);
     if (!(await checkPassword(str(body?.current), u.pass))) return c.json({ error: 'The current password is wrong.', errors: { current: 'Wrong password.' } }, 400);
@@ -205,7 +200,6 @@ export function createApp({ db, secret, uploadDir, fetchGitHub = fetch, mode = '
   });
 
   app.delete('/api/account', async (c) => {
-    if (!hosted) return c.json({ error: 'This server has one owner from .env.' }, 404);
     const u = userById(c.get('uid'))!;
     const body = await readJson(c);
     if (!(await checkPassword(str(body?.password), u.pass))) return c.json({ error: 'The password is wrong.', errors: { password: 'Wrong password.' } }, 400);
@@ -225,8 +219,8 @@ export function createApp({ db, secret, uploadDir, fetchGitHub = fetch, mode = '
   const setting = (key: string) => JSON.parse(db.query<{ value: string }, [string]>('SELECT value FROM settings WHERE key = ?').get(key)?.value ?? 'null');
   const saveSetting = (key: string, v: unknown) =>
     db.query('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, JSON.stringify(v));
-  const devKey = (uid: number) => (uid === 0 ? 'dev' : `dev:${uid}`);
-  // Older versions kept the landing look inside the owner's settings.
+  const devKey = (uid: number) => `dev:${uid}`;
+  // Older versions kept the landing look inside the one owner's settings ('dev').
   const getLanding = (): LandingThemeId => { const l = setting('landing'); return LANDING_THEMES.some((t) => t.id === l) ? l : parseDevSettings(setting('dev')).landing; };
   app.get('/api/settings', (c) => c.json({ ...parseDevSettings(setting(devKey(c.get('uid')))), landing: getLanding() }));
   app.put('/api/settings', async (c) => {
@@ -265,10 +259,8 @@ export function createApp({ db, secret, uploadDir, fetchGitHub = fetch, mode = '
     const kind = MEDIA_TYPES.find((t) => t.test(bytes));
     if (!kind) return c.json({ error: 'Use a PNG, JPEG, GIF or WebP image, or an MP4 or WebM video.' }, 400);
     if (file.size > kind.max) return c.json({ error: `The file must be ${kind.max / MB} MB or smaller.` }, 413);
-    if (hosted) {
-      const used = db.query<{ n: number }, [number]>('SELECT COALESCE(SUM(size), 0) AS n FROM uploads WHERE owner = ?').get(uid)!.n;
-      if (used + bytes.length > uploadLimitMb * MB) return c.json({ error: `Your storage is full (${uploadLimitMb} MB). Remove a video or an image first.` }, 413);
-    }
+    const used = db.query<{ n: number }, [number]>('SELECT COALESCE(SUM(size), 0) AS n FROM uploads WHERE owner = ?').get(uid)!.n;
+    if (used + bytes.length > uploadLimitMb * MB) return c.json({ error: `Your storage is full (${uploadLimitMb} MB). Remove a video or an image first.` }, 413);
     const name = `${newId()}${newId()}.${kind.ext}`;
     mkdirSync(uploadDir, { recursive: true });
     await Bun.write(join(uploadDir, name), bytes);

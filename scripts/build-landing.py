@@ -41,11 +41,11 @@ def wire(s):
     s = re.sub(r'href="#([a-z]+)"', r'href="#\1" onClick={jump("\1")}', s)
     s = s.replace('aria-label="Copy command">', 'aria-label="Copy command" onClick={copyCmd}>')
     s = re.sub(r'<a ([^>]*?)href="#">Self-host it', r'<a \1href={DOCS}>Self-host it', s)
-    # Hosted mode (MODE=hosted): "Create a free account" comes first, and "Self-host it" becomes the second button.
+    # While sign-up is open (SIGNUP is not "closed"): "Create a free account" comes first, and "Self-host it" second.
     primary = '<a class="fb-btn fb-btn--primary fb-btn--lg" href={DOCS}>Self-host it'
     assert primary in s
-    s = s.replace(primary, '{props.hosted && <a class="fb-btn fb-btn--primary fb-btn--lg" href="/admin/signup">Create a free account</a>}'
-                  '<a class={props.hosted ? "fb-btn fb-btn--secondary fb-btn--lg" : "fb-btn fb-btn--primary fb-btn--lg"} href={DOCS}>Self-host it')
+    s = s.replace(primary, '{props.signup && <a class="fb-btn fb-btn--primary fb-btn--lg" href="/admin/signup">Create a free account</a>}'
+                  '<a class={props.signup ? "fb-btn fb-btn--secondary fb-btn--lg" : "fb-btn fb-btn--primary fb-btn--lg"} href={DOCS}>Self-host it')
     s = re.sub(r'<a ([^>]*?)href="#">Live demo', r'<a \1href="/admin">Sign in', s)  # no public demo: open dev mode
     s = s.replace('<a href="#">Docs</a><a href="#">GitHub</a><a href="#">License</a>',
                   '<a href={REPO}>GitHub</a><a href={REPO} target="_blank" rel="noopener">Star on GitHub</a>')
@@ -63,7 +63,7 @@ HEAD = '''// Generated from the design system card "{card}" by scripts/build-lan
 import {{ Brand }} from '../ui/kit';
 import {{ copyCmd, DOCS, jump, LandingMenu, REPO, StarBox }} from './shared';
 
-export default function {fn}(props: {{ intro: boolean; hosted: boolean }}) {{
+export default function {fn}(props: {{ intro: boolean; signup: boolean }}) {{
   return (
 '''
 for fn, card in [('LandingPaper', 'LandingPaperFull'), ('LandingArcade', 'LandingArcadeFull')]:

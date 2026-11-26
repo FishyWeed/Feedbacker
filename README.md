@@ -7,14 +7,14 @@ There are two ways to use it:
 
 | Way | For whom | How |
 |---|---|---|
-| **Use the website** | People who want forms without running a server | Open the Feedbacker website, select **Create a free account**, and sign in with your email and password. Your forms, answers and uploads are private to your account. |
-| **Self-host with Docker** | People who want their own copy on their own hosting service or VPS | Run `docker compose up -d` (see [Deploy](#deploy)). Your copy has one owner, whose username and password are in `.env`. |
+| **Use the website** | People who want forms without running a server | Open the Feedbacker website, select **Create a free account**, and sign in with your email and password. |
+| **Self-host with Docker** | People who want their own copy on their own hosting service or VPS | Run `docker compose up -d` (see [Deploy](#deploy)), open `/admin/signup` and create your account. |
 
-The same code runs both: `MODE=single` (the default) is the self-hosted copy with one owner, and `MODE=hosted` is the
-public website with open sign-up. See [Run the public website](#run-the-public-website-modehosted).
+Both work the same way: everyone signs in with their own account (an email and a password), and each account sees only
+its own forms, answers and uploads. On your own copy, you can close sign-up after you make your account
+(`SIGNUP=closed`).
 
-- **Private dev mode:** Only signed-in owners can open dev mode (`/admin`). A self-hosted copy has one owner from
-  `.env`. On the website, each account sees only its own forms.
+- **Accounts:** sign up at `/admin/signup`. Dev mode (`/admin`) shows only your own forms. See [Accounts](#accounts).
 - **Drag-and-drop editor:** Sections contain rows. Rows contain 1 to 4 columns. Columns contain blocks.
   Drag blocks, rows and sections to move them. Drop a block above, between or below rows to make a new row.
 - **"Other" option:** single and multiple choice can add an "Other" choice (you can rename it) where people type
@@ -45,7 +45,7 @@ public website with open sign-up. See [Run the public website](#run-the-public-w
   New forms are not live until their first Publish.
 - **Dev mode settings** (`/admin/settings`): 7 dev themes (Default, Workbench, Blueprint, Arcade, Ink, Dusk, Paper),
   Auto/Light/Dark, and fonts for the interface, headings and labels, with pairing presets. Each account has its own.
-  On the website, Settings → Account also changes the password and deletes the account.
+  Settings → Account also changes the password and deletes the account.
 - **Preview and share link** for each form.
 - **QR codes:** a plain default code, or a custom one: "match the form theme" or your own colors, gradients (linear at any angle,
   radial, or one color per corner; 2-4 colors; 8 presets),
@@ -53,9 +53,9 @@ public website with open sign-up. See [Run the public website](#run-the-public-w
   each design while you edit it. Download as PNG or SVG.
 - **Responses:** a summary with counts, percentages and averages for each question, a table you can search, sort and
   filter from its column titles, and a CSV export. The forms list can be sorted and filtered too.
-- **Landing page** at `/`: Paper by default, or Arcade (Settings → Appearance → Landing page; on the website only the
-  `ADMIN_EMAIL` account can change it). On the website its first button is **Create a free account**, and
-  **Self-host it** comes second. Dev mode is at `/admin`.
+- **Landing page** at `/`: Paper by default, or Arcade (Settings → Appearance → Landing page; only the admin account
+  can change it). While sign-up is open, its first button is **Create a free account**, and **Self-host it** comes
+  second. Dev mode is at `/admin`.
 - **Status ticker**: in the Arcade and Paper dev themes, a scrolling line under the top bar repeats the page's key facts
   (save state, counts, settings). Screen readers skip it; every fact also shows on the page. It stops under reduced motion.
 - **Logo and motion**: the "Falling" mark from the design system, with a favicon that follows light and dark mode.
@@ -85,7 +85,7 @@ You need [Bun](https://bun.com/docs/installation) 1.4 or later.
    cd Feedbacker
    bun install
    ```
-2. Copy the example settings and set your own owner username and password (at least 8 characters):
+2. Copy the example settings (all of them are optional):
    ```bash
    cp .env.example .env
    ```
@@ -94,7 +94,7 @@ You need [Bun](https://bun.com/docs/installation) 1.4 or later.
    bun run build
    bun run start
    ```
-4. Open <http://localhost:4200/admin> and sign in.
+4. Open <http://localhost:4200/admin/signup> and create your account.
 
 ### Development mode
 
@@ -115,22 +115,20 @@ Open <http://localhost:4200/admin>. The pages reload when you change the code.
 
 ## Configuration
 
-Bun reads `.env` automatically. Never commit `.env`: it holds your password.
+Bun reads `.env` automatically. Never commit `.env`. Every setting is optional.
 
 | Variable | Required | Default | Meaning |
 |---|---|---|---|
-| `MODE` | No | `single` | `single`: a self-hosted copy with one owner. `hosted`: the public website with open sign-up. |
-| `ADMIN_USERNAME` | In `single` mode | – | Owner username for dev mode. |
-| `ADMIN_PASSWORD` | In `single` mode | – | Owner password. At least 8 characters. In `single` mode the server does not start without it. |
-| `ADMIN_EMAIL` | No | – | `hosted` mode: the site owner's account email. That account sets the landing page look and takes over the forms made before the switch from `single` mode. |
-| `UPLOAD_LIMIT_MB` | No | `100` | `hosted` mode: storage for uploaded images and videos per account. |
-| `CLIENT_IP_HEADER` | In `hosted` mode behind a proxy | – | The header your proxy sets to the visitor's address: `Fly-Client-IP` on Fly.io, `X-Real-IP` on Railway, `X-Forwarded-For` behind Caddy. Sign-in and sign-up limits count per address. |
+| `ADMIN_EMAIL` | No | – | The admin account's email. It sets the landing page look and gets the forms from older versions (see [Upgrade from a version with one owner](#upgrade-from-a-version-with-one-owner)). Without it, the first account is the admin. |
+| `SIGNUP` | No | `open` | `closed` stops new accounts. Existing accounts still sign in. |
+| `CLIENT_IP_HEADER` | Behind a proxy | – | The header your proxy sets to the visitor's address: `Fly-Client-IP` on Fly.io, `X-Real-IP` on Railway, `X-Forwarded-For` behind Caddy. Sign-in and sign-up limits count per address. |
+| `UPLOAD_LIMIT_MB` | No | `100` | Storage for uploaded images and videos per account. |
 | `PORT` | No | `4200` | HTTP port. |
 | `DATABASE_PATH` | No | `data/feedbacker.db` | Path of the SQLite file. The folder is made if it does not exist. Uploaded images go into an `uploads` folder next to it. |
 
 ## Deploy
 
-**Warning:** Always serve Feedbacker over HTTPS in production. Without HTTPS, the owner password and the session cookie
+**Warning:** Always serve Feedbacker over HTTPS in production. Without HTTPS, passwords and the session cookie
 travel as plain text.
 
 All data (the SQLite database, uploaded images and the session secret) is in one folder, `/app/data`. Every option
@@ -146,12 +144,13 @@ hosts) cannot run Feedbacker.
 
 ### Option A: Docker (recommended)
 
-1. Make `.env` (see [Configuration](#configuration)).
+1. Make `.env` (see [Configuration](#configuration)). An empty file works.
 2. Build and start the container:
    ```bash
    docker compose up -d --build
    ```
-3. Open `http://<your-server>:4200/admin`.
+3. Open `http://<your-server>:4200/admin/signup` and create your account. If the server is only for you or your team,
+   set `SIGNUP=closed` in `.env` after that and run `docker compose up -d` again.
 
 The database and the uploaded images are in the Docker volume `feedbacker-data`. To back them up, copy the folder
 `/app/data` out of the container (for example with `docker compose cp feedbacker:/app/data ./backup`).
@@ -187,11 +186,11 @@ copies of your forms and responses.
    ```bash
    fly volumes create feedbacker_data --size 1 --region <region>
    ```
-4. Set the owner sign-in as secrets (use a long password):
+4. Set your admin email and the client address header:
    ```bash
-   fly secrets set ADMIN_USERNAME=<username> ADMIN_PASSWORD=<password>
+   fly secrets set ADMIN_EMAIL=<your email> CLIENT_IP_HEADER=Fly-Client-IP
    ```
-5. Deploy, then open `https://<app-name>.fly.dev/admin`:
+5. Deploy, then open `https://<app-name>.fly.dev/admin/signup` and create your account:
    ```bash
    fly deploy
    ```
@@ -210,17 +209,17 @@ on your computer.
 **Warning:** Keep one replica. Each replica would have its own copy of the data.
 
 1. In Railway, create a project: **Deploy from GitHub repo**, and pick this repository.
-2. In the service's **Variables**, add `ADMIN_USERNAME` and `ADMIN_PASSWORD` (use a long password).
+2. In the service's **Variables**, add `ADMIN_EMAIL` (your email) and `CLIENT_IP_HEADER` with the value `X-Real-IP`.
 3. Attach a volume to the service with the mount path `/app/data`.
 4. In **Settings → Networking**, select **Generate Domain** (or add your own domain). If Railway asks for a port, enter
    `4200`.
-5. Open `https://<your-domain>/admin` and sign in.
+5. Open `https://<your-domain>/admin/signup` and create your account.
 
 To update, push to GitHub; Railway builds and deploys the new version, and the data stays on the volume. You do not
 need the `RAILWAY_RUN_UID` variable: the container gives the volume to its own user at start, then runs without root
 rights. The Dockerfile has no `VOLUME` line on purpose, because Railway rejects it.
 
-Render and similar platforms work the same way: build the `Dockerfile`, set the two secrets, expose port `4200`, and
+Render and similar platforms work the same way: build the `Dockerfile`, set the variables, expose port `4200`, and
 attach a persistent disk at `/app/data`.
 
 ### Option D: a plain server without Docker
@@ -231,36 +230,34 @@ attach a persistent disk at `/app/data`.
 4. Run `bun run start` under a process manager (for example a systemd service) so it restarts after a crash or a reboot.
 5. Put a reverse proxy with HTTPS in front of it (see Option A).
 
-### Run the public website (`MODE=hosted`)
+### Accounts
 
-The website is the same app with open sign-up. Deploy it with any option above, and set these variables (as secrets
-on Fly.io or Railway, or in `.env` with Docker):
+Every copy works the same way: the public website and your own server.
 
-```
-MODE=hosted
-ADMIN_EMAIL=you@example.com
-CLIENT_IP_HEADER=Fly-Client-IP
-```
-
-1. Set `CLIENT_IP_HEADER` for your host (see [Configuration](#configuration)).
-   **Warning:** Without it, every visitor behind the proxy shares one address. Then 5 wrong passwords from anyone lock
-   sign-in for everyone for 15 minutes, and only 5 accounts can be made per hour. Never set a header that your proxy
-   does not overwrite, because visitors can send any value in it.
-2. Deploy, open `https://<your-domain>/admin/signup` and create the account for `ADMIN_EMAIL`.
-3. If the copy was in `single` mode before, its forms move to the `ADMIN_EMAIL` account when that account signs up or
-   signs in.
-
-`ADMIN_USERNAME` and `ADMIN_PASSWORD` are not used in `hosted` mode.
-
-What the website does and does not do:
-
-- **Accounts:** an email and a password (at least 8 characters, stored as an Argon2id hash). Nobody checks that the
-  email is real, and there is no password reset by email. Users change their password in Settings → Account; this signs
-  out their other devices.
+- **Sign-up:** an email and a password (at least 8 characters, stored as an Argon2id hash) at `/admin/signup`.
+  Nobody checks that the email is real, and there is no password reset by email. `SIGNUP=closed` stops new accounts.
 - **Privacy:** each account sees only its own forms, answers and settings. Another account's form looks like a missing
-  form. Settings → Account → **Delete account** removes the account, its forms, answers and uploaded files.
+  form. Settings → Account changes the password (this signs out the other devices) and deletes the account with its
+  forms, answers and uploaded files.
+- **Admin:** the `ADMIN_EMAIL` account, or the first account if `ADMIN_EMAIL` is not set. Only the admin changes the
+  landing page look.
 - **Limits:** 5 new accounts per address per hour, and `UPLOAD_LIMIT_MB` of uploads per account. There is no limit on
   the number of forms or answers.
+
+**Warning:** Behind a proxy (Fly.io, Railway, Caddy), set `CLIENT_IP_HEADER`. Without it, every visitor shares the
+proxy's address: 5 wrong passwords from anyone lock sign-in for everyone for 15 minutes, and only 5 accounts can be made
+per hour. Never set a header that your proxy does not overwrite, because visitors can send any value in it.
+
+### Upgrade from a version with one owner
+
+Older versions had one owner, set with `ADMIN_USERNAME` and `ADMIN_PASSWORD` in `.env`. These settings are gone.
+
+1. Set `ADMIN_EMAIL` to your email (in `.env`, or as a secret on Fly.io or Railway).
+2. Deploy the new version.
+3. Open `/admin/signup` and create the account for that email. Your forms, responses and dev mode look move to it.
+
+Old forms go only to the `ADMIN_EMAIL` account, never to whoever signs up first. Until then, the server log shows how
+many forms wait. You can remove `ADMIN_USERNAME` and `ADMIN_PASSWORD` from your settings.
 
 ## Design system
 
@@ -275,7 +272,7 @@ the preview always matches what visitors see.
 ## How it works
 
 ```
-server/      Hono app: owner sign-in, form API, public form API, static files
+server/      Hono app: accounts and sign-in, form API, public form API, static files
 shared/      Code that the server and the browser both use
   schema.ts  Form document types, defaults and the check for saved forms
   logic.ts   Conditional visibility, pages and answer checks
@@ -292,12 +289,11 @@ scripts/     dev.ts starts the two dev servers
 - **Rules:** A rule can use only answers to questions that come *earlier* in the form. This prevents loops.
   The same code (`shared/logic.ts`) runs in the browser and on the server. The server drops answers to hidden
   questions and checks that each visible required question has an answer.
-- **Sign-in:** In `single` mode the server compares the username and password from `.env` in constant time. In
-  `hosted` mode it checks the email and the Argon2id password hash from the `users` table (an unknown email takes as
-  long as a wrong password). Both set a signed, `HttpOnly`, `SameSite=Strict` cookie for 7 days that holds the account
-  id and a version; a password change raises the version and ends older sessions. After 5 failed attempts from one
-  address, sign-in is locked for 15 minutes.
-- **Accounts:** each form has an `owner` (0 is the `single` mode owner). Every owner route checks it.
+- **Sign-in:** the server checks the email and the Argon2id password hash from the `users` table (an unknown email
+  takes as long as a wrong password). It sets a signed, `HttpOnly`, `SameSite=Strict` cookie for 7 days that holds the
+  account id and a version; a password change raises the version and ends older sessions. After 5 failed attempts from
+  one address, sign-in is locked for 15 minutes.
+- **Accounts:** each form has an `owner` (the account id; 0 marks forms from older versions). Every owner route checks it.
 - **Share links** have the form `/f/<id>`. The id is 10 random characters (60 bits).
 - **Uploads:** only signed-in owners can upload. Each file is recorded in the `uploads` table with its account and size. The server checks the first bytes of each file, so only real PNG, JPEG,
   GIF, WebP, MP4 and WebM files are kept (SVG is refused because it can carry scripts). Files get random names under
@@ -313,12 +309,12 @@ scripts/     dev.ts starts the two dev servers
 
 ### Known limits
 
-- The session secret is stored in the data folder (`session.secret`). Changing `ADMIN_PASSWORD` signs every session out.
+- The session secret is stored in the data folder (`session.secret`). Deleting it signs every session out.
 - Public form submissions have no spam protection (no rate limit or captcha).
 - Behind a reverse proxy, the failed-sign-in count uses the proxy's address unless `CLIENT_IP_HEADER` is set, so all
   visitors share one count.
 - Sign-in and sign-up counts live in memory. Run one server only (this is already true, because the data is one SQLite file).
-- `hosted` mode has no email: no address check and no password reset. A user who forgets the password cannot get in.
+- There is no email: no address check and no password reset. A user who forgets the password cannot get in.
 - Rules compare option text. If you rename an option, check the rules that use it.
 - Uploaded images stay on disk when you delete the image block or the form. They go when the account is deleted.
 
@@ -329,20 +325,19 @@ If a user asks you to set up, run or deploy this project, follow these steps in 
 1. Check the Bun version with `bun --version`. If Bun is missing or older than 1.4, tell the user how to install or
    upgrade it (`bun upgrade`). Do not continue on an older Bun.
 2. Run `bun install`.
-3. If `.env` does not exist, copy `.env.example` to `.env`. Ask the user which mode they want: `single` (self-hosted,
-   one owner) or `hosted` (public website with sign-up). For `single`, ask for the owner username and password.
+3. If `.env` does not exist, copy `.env.example` to `.env`. Ask the user for their email for `ADMIN_EMAIL`, and
+   whether others may sign up (if not, `SIGNUP=closed` after the user makes their account).
    The password must have at least 8 characters. Do not invent a password and do not show it in chat.
    Never commit `.env`. Never put the password in any other file.
 4. Run `bun test` and `bun run typecheck`. Both must pass before you continue.
-5. Local run: run `bun run build`, then `bun run start`. Tell the user to open `http://localhost:4200/admin`.
+5. Local run: run `bun run build`, then `bun run start`. Tell the user to open `http://localhost:4200/admin/signup`.
    For development, run `bun run dev` and use the same address, `http://localhost:4200/admin`.
 6. Deploy: ask the user where to deploy, then follow [Deploy](#deploy). Make sure that:
    - the database folder `/app/data` (Docker) or the `DATABASE_PATH` folder is on persistent storage,
    - HTTPS is in front of the app,
-   - `ADMIN_USERNAME` and `ADMIN_PASSWORD` (`single` mode) are set as secrets on the platform, not in the repository,
-   - in `hosted` mode, `MODE=hosted`, `ADMIN_EMAIL` and the right `CLIENT_IP_HEADER` are set.
+   - `ADMIN_EMAIL` and the right `CLIENT_IP_HEADER` are set on the platform, not in the repository.
 7. Check the deploy: `GET /api/public/forms/does-not-exist` must return HTTP 404 with JSON, and `/admin` must show
-   the sign-in page. In `hosted` mode, `GET /api/site` must return `"mode":"hosted"`.
+   the sign-in page.
 
 Rules for changes to the code:
 

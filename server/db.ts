@@ -24,7 +24,7 @@ export function openDb(path: string): Database {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
-    -- Hosted mode accounts. \`ver\` goes up when the password changes, which ends every older session.
+    -- Accounts. \`ver\` goes up when the password changes, which ends every older session.
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -47,7 +47,7 @@ export function openDb(path: string): Database {
     // Forms from before publishing existed were live already; keep their links working.
     db.exec('UPDATE forms SET published = doc, published_at = updated_at');
   }
-  // Accounts: `owner` is the user id; 0 is the single owner from .env (self-hosted mode, and all older forms).
+  // Accounts: `owner` is the user id. 0 marks forms from older versions (one owner from .env); see claimOldForms.
   if (!cols.includes('owner')) db.exec('ALTER TABLE forms ADD COLUMN owner INTEGER NOT NULL DEFAULT 0');
   db.exec('CREATE INDEX IF NOT EXISTS forms_by_owner ON forms(owner, updated_at)');
   return db;

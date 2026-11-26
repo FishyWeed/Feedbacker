@@ -1,4 +1,4 @@
-// Dev-mode settings (Settings card): dev theme, color mode, landing page look and fonts. Only the owner sees dev mode;
+// Dev-mode settings: dev theme, color mode, landing page look (admin only), fonts and the account. Each account has its own;
 // none of this changes how forms look to visitors.
 import { createResource, createSignal, For, Show } from 'solid-js';
 import { api, ApiError, SIGNED_OUT } from '../api';
@@ -11,11 +11,10 @@ import { devSettings, devTheme, updateAppearance } from './appearance';
 import { signOut, TopBar } from './FormsList';
 import { Link } from './router';
 
-type Me = { mode: 'single' | 'hosted'; email?: string; admin: boolean };
+type Me = { email: string; admin: boolean };
 
 export default function Settings() {
   const [me] = createResource(() => api<Me>('/me'));
-  const hosted = () => me()?.mode === 'hosted';
   const [error, setError] = createSignal('');
   const [saved, setSaved] = createSignal(false);
   const s = devSettings;
@@ -119,18 +118,16 @@ export default function Settings() {
           </section>
           <h2 class="fb-h" id="account" tabIndex={-1} style={{ margin: '28px 0 12px' }}>Account</h2>
           <section class="fb-card" style={{ padding: '4px 24px' }}>
-            <Show when={hosted()}>
-              <div class="fb-set-row">
-                <div><h3>Email</h3><p>You sign in with this address.</p></div>
-                <div><b>{me()?.email}</b></div>
-              </div>
-              <ChangePassword />
-            </Show>
+            <div class="fb-set-row">
+              <div><h3>Email</h3><p>You sign in with this address.</p></div>
+              <div><b>{me()?.email}</b></div>
+            </div>
+            <ChangePassword />
             <div class="fb-set-row">
               <div><h3>Sign out</h3><p>Ends your session on this device. Your forms keep collecting answers.</p></div>
               <div><button type="button" class="fb-btn fb-btn--danger" onClick={signOut}>Sign out</button></div>
             </div>
-            <Show when={hosted()}><DeleteAccount /></Show>
+            <DeleteAccount />
           </section>
         </main>
       </div>
@@ -138,7 +135,7 @@ export default function Settings() {
   );
 }
 
-/** Hosted mode: change the password. Every other device is signed out; this one stays signed in. */
+/** Change the password. Every other device is signed out; this one stays signed in. */
 function ChangePassword() {
   const [msg, setMsg] = createSignal<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = createSignal(false);
@@ -172,7 +169,7 @@ function ChangePassword() {
   );
 }
 
-/** Hosted mode: delete the account, with every form, answer and uploaded file. Asks for the password first. */
+/** Delete the account, with every form, answer and uploaded file. Asks for the password first. */
 function DeleteAccount() {
   const [open, setOpen] = createSignal(false);
   const [error, setError] = createSignal('');
