@@ -153,6 +153,13 @@ export function createEditor(formId: string, initial: FormDoc, initialState: Pub
       if (dir === 'left' || dir === 'right') return false;
       return tryEdit((d) => (kind === 'row' ? nudgeRow(d, id, dir) : nudgeSection(d, id, dir)));
     },
+    /** Blueprint: a new page at `index` (before sections[index]), placed at `pos` on the board. Returns its id. */
+    addSectionAt(index: number, pos?: { x: number; y: number }) {
+      const s = { ...newSection(), ...(pos ? { pos } : {}) };
+      edit((d) => { d.sections.splice(Math.max(0, Math.min(index, d.sections.length)), 0, s); });
+      select(s.id);
+      return s.id;
+    },
     addSection() {
       const s = newSection();
       edit((d) => { d.sections.push(s); });
@@ -165,7 +172,7 @@ export function createEditor(formId: string, initial: FormDoc, initialState: Pub
       if (selected() === id) select(null);
     },
     /** Blueprint "Auto layout": forget every node position, so the nodes line up in page order again. */
-    clearPositions: () => edit((d) => { for (const s of d.sections) delete s.pos; }),
+    clearPositions: () => edit((d) => { for (const s of d.sections) { delete s.pos; delete s.bend; } }),
     addRow: (sectionId: string, columns: number) => edit((d) => { locate(d, sectionId)?.section.rows.push(newRow(columns)); }),
     removeRow: (rowId: string) => edit((d) => { const l = locate(d, rowId); if (l?.row) l.section.rows = l.section.rows.filter((r) => r.id !== rowId); }),
     /** Changes the column count. Blocks from removed columns move into the last column that stays. */

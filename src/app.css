@@ -357,9 +357,11 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 
 /* Blueprint view (src/admin/Blueprint.tsx; prefix fb-bpv, because fb-bp is the design system block preview): pages as nodes on a dotted board, joined by flow lines. */
 .fb-bpv { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; }
-.fb-bpv-stage { position: relative; overflow: auto; background: radial-gradient(circle, var(--grid, var(--border)) 1px, transparent 1.4px) 0 0 / 20px 20px, var(--bg); }
-.fb-bpv-world { position: relative; }
-.fb-bpv-tools { position: sticky; top: 12px; left: 12px; z-index: 6; display: inline-flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 12px; padding: 6px 10px 6px 6px;
+/* A free board: no scrollbars; the world moves with the pan (right-drag or wheel), and so do the dots. */
+.fb-bpv-stage { position: relative; overflow: hidden; overflow: clip; /* clip: focus can never scroll it; panning shows focused items */ user-select: none; background: radial-gradient(circle, var(--grid, var(--border)) 1px, transparent 1.4px) 0 0 / 20px 20px, var(--bg); }
+.fb-bpv-stage.is-panning { cursor: grabbing; }
+.fb-bpv-world { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.fb-bpv-tools { position: absolute; top: 12px; left: 12px; z-index: 6; display: inline-flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 6px 10px 6px 6px;
   background: var(--surface); border: var(--bw, 1px) solid var(--border); border-radius: var(--radius-ctl); box-shadow: var(--shadow-card); }
 .fb-bpv-legend { display: inline-flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); font-family: var(--label-font, inherit); }
 .fb-bpv-legend i { display: inline-block; width: 22px; border-top: 2px solid var(--border-strong); margin-left: 6px; }
@@ -368,7 +370,8 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 .fb-bpv-panel { border-left: var(--bw, 1px) solid var(--border); overflow-y: auto; }
 @media (max-width: 900px) { .fb-bpv { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; } .fb-bpv-panel { border-left: 0; border-top: var(--bw, 1px) solid var(--border); max-height: 45vh; } }
 
-.fb-bpv-lines { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.fb-bpv-lines { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.fb-bpv-edge.is-wire { stroke: var(--accent-ink, var(--accent)); stroke-width: 2.5; stroke-dasharray: 6 4; }
 .fb-bpv-edge { fill: none; stroke-width: 2; stroke-linecap: round; }
 .fb-bpv-edge.is-flow { stroke: var(--border-strong); }
 .fb-bpv-edge.is-cond { stroke: var(--accent-ink, var(--accent)); stroke-dasharray: 7 5; }
@@ -407,14 +410,45 @@ html, .fb-stage { scrollbar-color: var(--root-sb-thumb, var(--border-strong)) tr
 .fb-bpv-row::before { content: ""; position: absolute; left: -15px; top: 17px; width: 15px; border-top: 2px solid var(--border-strong); }
 .fb-bpv-row::after { content: ""; position: absolute; left: -19px; top: 13px; width: 10px; height: 10px; border-radius: 50%; background: var(--border-strong); box-shadow: 0 0 0 2px var(--surface); }
 .fb-bpv-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.fb-bpv-el { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px; min-height: 34px; padding: 6px 8px; text-align: left; cursor: pointer;
+.fb-bpv-elw { position: relative; }
+.fb-bpv-el { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 6px; min-height: 34px; padding: 6px 8px; text-align: left; cursor: pointer;
   background: var(--surface2); color: var(--muted); border: var(--bw, 1px) solid var(--border); border-radius: var(--radius-ctl); font-size: 12px; }
 .fb-bpv-el.is-q { color: var(--text); }
 .fb-bpv-el > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fb-bpv-el.is-cond { border: var(--bw, 1px) dashed var(--accent-ink, var(--accent)); background: var(--surface); }
-.fb-bpv-el small { grid-column: 1 / -1; display: flex; gap: 4px; align-items: center; min-width: 0; color: var(--text); font: 600 11px/1.3 var(--label-font, inherit); }
-.fb-bpv-el small .fb-i { color: var(--accent-ink, var(--accent)); flex: none; }
 .fb-bpv-el.is-selected { outline: 2px solid var(--accent-ink, var(--accent)); outline-offset: 1px; }
 .fb-bpv-empty { margin: 0; font-size: 12px; color: var(--muted); }
 /* Phones: the editor grows with its content, so give the blueprint board its own scroll area and keep the panel reachable. */
 @media (max-width: 640px) { .fb-bpv-stage { height: 60vh; } }
+
+/* Ports: dots on a question's right side and on each page's sides. */
+.fb-bpv-port { position: absolute; z-index: 3; width: 14px; height: 14px; padding: 0; border-radius: 50%; cursor: pointer;
+  background: var(--surface); border: 2px solid var(--border-strong); transition: transform var(--t-hover) var(--ease), border-color var(--t-hover) var(--ease); }
+.fb-bpv-port::after { content: ""; position: absolute; inset: -8px; } /* a bigger hit target than the dot */
+.fb-bpv-port:hover, .fb-bpv-port:focus-visible { border-color: var(--accent-ink, var(--accent)); background: var(--accent-soft); transform: scale(1.25); }
+.fb-bpv-port.is-q { right: 7px; top: 50%; margin-top: -7px; width: 12px; height: 12px; } /* inside the block's right end */
+.fb-bpv-port.is-in { left: -8px; top: 19px; }
+.fb-bpv-port.is-out { right: -8px; top: 19px; }
+/* While a wire is out: valid ends light up, everything else fades. */
+.is-wiring .fb-bpv-el.is-target, .is-wiring .fb-bpv-node.is-target { box-shadow: 0 0 0 2px var(--accent-ink, var(--accent)); cursor: copy; }
+.is-wiring .fb-bpv-el:not(.is-target):not(.is-source) { opacity: .4; }
+.is-wiring .fb-bpv-el.is-source { outline: 2px dashed var(--accent-ink, var(--accent)); outline-offset: 1px; }
+.fb-bpv-wiretag { position: absolute; z-index: 9; pointer-events: none; padding: 4px 8px; border-radius: 999px; white-space: nowrap;
+  background: var(--text); color: var(--bg); font: 600 12px/1.2 var(--label-font, inherit); }
+.fb-bpv-menu { position: absolute; z-index: 10; width: 236px; max-height: 250px; overflow-y: auto; }
+.fb-bpv-menu-t { display: block; padding: 6px 10px 4px; color: var(--muted); }
+.fb-bpv-note { position: absolute; left: 12px; bottom: 12px; z-index: 6; margin: 0; max-width: calc(100% - 24px); padding: 6px 10px; border-radius: var(--radius-ctl);
+  background: color-mix(in srgb, var(--surface) 92%, transparent); border: var(--bw, 1px) solid var(--border); font-size: 12px; color: var(--muted); }
+
+/* Blocks with a dot keep room for it; a conditional block shows a compact "If" mark (the rule is on its line). */
+.fb-bpv-elw:has(.fb-bpv-port) .fb-bpv-el { padding-right: 28px; }
+.fb-bpv-if { display: inline-grid; place-items: center; color: var(--accent-ink, var(--accent)); }
+/* Lines between elements: above the pages, thin and dashed; brighter when either end is selected. */
+.fb-bpv-lines.is-top { z-index: 3; }
+.fb-bpv-edge.is-elem { stroke: var(--accent-ink, var(--accent)); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: .75; }
+.fb-bpv-edge.is-elem.is-on { stroke-width: 2.5; opacity: 1; }
+.fb-bpv-arrow.is-elem { fill: var(--accent-ink, var(--accent)); }
+.fb-bpv-elabel { position: absolute; z-index: 4; transform: translate(-50%, -50%); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 2px 8px; border-radius: 999px; cursor: pointer; background: var(--surface); color: var(--text);
+  border: var(--bw, 1px) solid var(--accent-ink, var(--accent)); font: 600 11px/1.4 var(--label-font, inherit); }
+.fb-bpv-elabel.is-on, .fb-bpv-elabel:hover { background: var(--accent-soft); }

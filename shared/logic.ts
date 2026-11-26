@@ -180,3 +180,13 @@ export function ruleText(rule: Rule, doc: FormDoc): string {
   const one = (c: Condition) => `${name(c.q)} ${OP_LABELS[c.op]}${c.op === 'answered' || c.op === 'not_answered' ? '' : ` "${c.value ?? ''}"`}`;
   return `If ${rule.conditions.map(one).join(rule.match === 'any' ? ' or ' : ' and ')}`;
 }
+
+/** Adds a condition to a rule, or starts a rule with it. The same condition twice is not added again. */
+export function withCondition(rule: Rule | undefined, c: Condition): Rule {
+  if (!rule) return { match: 'all', conditions: [c] };
+  if (rule.conditions.some((x) => x.q === c.q && x.op === c.op && x.value === c.value)) return rule;
+  return { ...rule, conditions: [...rule.conditions, c] };
+}
+
+/** True if the block or section `targetId` may use question `qId` in its rule: the question must come before it. */
+export const canUseQuestion = (doc: FormDoc, targetId: string, qId: string) => questionsBefore(doc, targetId).some((q) => q.id === qId);

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { checkAnswers, pagesOf, questionsBefore, ruleText, visibleIds, visiblePages } from './logic';
+import { canUseQuestion, checkAnswers, pagesOf, questionsBefore, ruleText, visibleIds, visiblePages, withCondition } from './logic';
 import { parseFormDoc, type Block, type FormDoc } from './schema';
 
 const q = (id: string, kind: Block['kind'], extra: Partial<Block> = {}): Block => ({ id, kind, label: id, ...extra });
@@ -81,7 +81,19 @@ test('parseFormDoc keeps a valid blueprint position, rounds and clamps it, and d
   const base = { title: 't', sections: [{ id: 's1', rows: [{ id: 'r1', columns: [{ id: 'c1', blocks: [] }] }] }] };
   const at = (pos: unknown) => parseFormDoc({ ...base, sections: [{ ...base.sections[0], pos }] })!.sections[0]!.pos;
   expect(at({ x: 120.6, y: 40 })).toEqual({ x: 121, y: 40 });
-  expect(at({ x: -5, y: 1e9 })).toEqual({ x: 0, y: 20000 });
+  expect(at({ x: -5, y: 1e9 })).toEqual({ x: -5, y: 20000 }); // the board has no edge, so negatives are fine
   expect(at({ x: 'a', y: 1 })).toBeUndefined();
   expect(at(undefined)).toBeUndefined();
+});
+
+test('withCondition starts or extends a rule, without duplicates; canUseQuestion needs the question to come first', () => {
+  const c = { q: 'likes', op: 'equals' as const, value: 'Yes' };
+  const r = withCondition(undefined, c);
+  expect(r).toEqual({ match: 'all', conditions: [c] });
+  expect(withCondition(r, { ...c })).toBe(r);
+  expect(withCondition({ match: 'any', conditions: [c] }, { q: 'likes', op: 'answered' }).conditions.length).toBe(2);
+  expect(canUseQuestion(doc, 's2', 'likes')).toBe(true); // a later page
+  expect(canUseQuestion(doc, 'why', 'likes')).toBe(true); // a later block on the same page
+  expect(canUseQuestion(doc, 'likes', 'likes')).toBe(false); // itself
+  expect(canUseQuestion(doc, 's1', 'likes')).toBe(false); // its own page
 });
