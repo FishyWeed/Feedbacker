@@ -124,23 +124,23 @@ export default function Blueprint() {
   const sel = () => ed.selected();
 
   return (
-    <div class="fb-bp">
-      <div class="fb-bp-stage" onClick={(e) => e.target === e.currentTarget && ed.select(null)}>
-        <div class="fb-bp-tools">
+    <div class="fb-bpv">
+      <div class="fb-bpv-stage" onClick={(e) => e.target === e.currentTarget && ed.select(null)}>
+        <div class="fb-bpv-tools">
           <button type="button" class="fb-btn fb-btn--secondary fb-btn--sm" disabled={!ed.doc.sections.some((s) => s.pos)}
             onClick={() => ed.actions.clearPositions()} title="Put every page back in a row, in page order">
             <Icon name="columns" size="sm" />Auto layout
           </button>
-          <span class="fb-bp-legend" aria-hidden="true"><i class="is-flow" />Next page<i class="is-cond" />Only if<i class="is-bypass" />Otherwise</span>
+          <span class="fb-bpv-legend" aria-hidden="true"><i class="is-flow" />Next page<i class="is-cond" />Only if<i class="is-bypass" />Otherwise</span>
         </div>
-        <div class="fb-bp-world" style={{ width: `${size().w}px`, height: `${size().h}px` }} onClick={(e) => e.target === e.currentTarget && ed.select(null)}>
-          <svg class="fb-bp-lines" width={size().w} height={size().h} aria-hidden="true">
+        <div class="fb-bpv-world" style={{ width: `${size().w}px`, height: `${size().h}px` }} onClick={(e) => e.target === e.currentTarget && ed.select(null)}>
+          <svg class="fb-bpv-lines" width={size().w} height={size().h} aria-hidden="true">
             <defs>
               <For each={['flow', 'cond', 'bypass']}>
-                {(k) => <marker id={`fb-bp-arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class={`fb-bp-arrow is-${k}`} /></marker>}
+                {(k) => <marker id={`fb-bpv-arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class={`fb-bpv-arrow is-${k}`} /></marker>}
               </For>
             </defs>
-            <For each={edges()}>{(e) => <path d={e.d} class={`fb-bp-edge is-${e.kind}`} marker-end={`url(#fb-bp-arrow-${e.kind})`} />}</For>
+            <For each={edges()}>{(e) => <path d={e.d} class={`fb-bpv-edge is-${e.kind}`} marker-end={`url(#fb-bpv-arrow-${e.kind})`} />}</For>
           </svg>
 
           {/* Line labels: a condition to edit, an "add condition" spot, or "Otherwise". */}
@@ -151,14 +151,14 @@ export default function Blueprint() {
                   {(t) => (
                     <Show when={t.showIf} keyed fallback={
                       <Show when={e.page! > 1}>
-                        <button type="button" class="fb-bp-add" style={{ left: `${e.mid.x}px`, top: `${e.mid.y}px` }}
+                        <button type="button" class="fb-bpv-add" style={{ left: `${e.mid.x}px`, top: `${e.mid.y}px` }}
                           aria-label={`Add a condition to page ${e.page}`} title="Show this page only if…" onClick={() => ed.select(t.id)}>
                           <Icon name="plus" size="sm" />
                         </button>
                       </Show>
                     }>
                       {(rule) => (
-                        <button type="button" class="fb-bp-cond" classList={{ 'is-on': sel() === t.id }} style={{ left: `${e.mid.x}px`, top: `${e.mid.y}px` }}
+                        <button type="button" class="fb-bpv-cond" classList={{ 'is-on': sel() === t.id }} style={{ left: `${e.mid.x}px`, top: `${e.mid.y}px` }}
                           title={`${ruleText(rule, ed.doc)}. Click to change.`} onClick={() => ed.select(t.id)}>
                           <Icon name="branch" size="sm" /><span>{ruleText(rule, ed.doc)}</span>
                         </button>
@@ -167,38 +167,38 @@ export default function Blueprint() {
                   )}
                 </Show>
               }>
-                <span class="fb-bp-else" style={{ left: `${e.mid.x}px`, top: `${e.mid.y}px` }}>Otherwise</span>
+                <span class="fb-bpv-else" style={{ left: `${e.mid.x}px`, top: `${e.mid.y}px` }}>Otherwise</span>
               </Show>
             )}
           </For>
 
-          <span class="fb-bp-term" style={{ left: `${start().x}px`, top: `${start().y}px` }}>Start</span>
-          <span class="fb-bp-term" style={{ left: `${end().x}px`, top: `${end().y}px` }}>Thank-you page</span>
+          <span class="fb-bpv-term" style={{ left: `${start().x}px`, top: `${start().y}px` }}>Start</span>
+          <span class="fb-bpv-term" style={{ left: `${end().x}px`, top: `${end().y}px` }}>Thank-you page</span>
 
           <For each={ed.doc.sections}>
             {(s, i) => (
-              <section ref={measure} data-id={s.id} class="fb-bp-node" classList={{ 'is-selected': sel() === s.id, 'is-dragging': drag()?.id === s.id, 'is-cond': !!s.showIf }}
+              <section ref={measure} data-id={s.id} class="fb-bpv-node" classList={{ 'is-selected': sel() === s.id, 'is-dragging': drag()?.id === s.id, 'is-cond': !!s.showIf }}
                 style={{ left: `${posOf(s, i()).x}px`, top: `${posOf(s, i()).y}px`, width: `${NODE_W}px` }} aria-label={`Page ${i() + 1}`}>
-                <header class="fb-bp-node-h" tabIndex={0} role="button"
+                <header class="fb-bpv-node-h" tabIndex={0} role="button"
                   aria-label={`Page ${i() + 1}${s.title ? `: ${s.title}` : ''}. Arrow keys move it; Enter selects it.`}
                   onPointerDown={(e) => pressNode(s, i(), e)} onKeyDown={(e) => keyNode(s, i(), e)}>
                   <Icon name="grip" size="sm" />
-                  <span class="fb-bp-page">Page {i() + 1}</span>
+                  <span class="fb-bpv-page">Page {i() + 1}</span>
                   <b>{s.title?.trim() || `Section ${i() + 1}`}</b>
                   <Show when={s.showIf}><span class="fb-badge fb-badge--cond"><Icon name="branch" />If</span></Show>
                 </header>
                 {/* The internal circuit: down through each row, across each row's columns. */}
-                <div class="fb-bp-flow">
-                  <Show when={s.rows.some((r) => r.columns.some((c) => c.blocks.length))} fallback={<p class="fb-bp-empty">No blocks yet</p>}>
+                <div class="fb-bpv-flow">
+                  <Show when={s.rows.some((r) => r.columns.some((c) => c.blocks.length))} fallback={<p class="fb-bpv-empty">No blocks yet</p>}>
                     <For each={s.rows}>
                       {(r) => (
-                        <div class="fb-bp-row" style={{ '--n': r.columns.length }}>
+                        <div class="fb-bpv-row" style={{ '--n': r.columns.length }}>
                           <For each={r.columns}>
                             {(c) => (
-                              <div class="fb-bp-col">
+                              <div class="fb-bpv-col">
                                 <For each={c.blocks}>
                                   {(b) => (
-                                    <button type="button" class="fb-bp-el" classList={{ 'is-q': isQuestion(b), 'is-cond': !!b.showIf, 'is-selected': sel() === b.id }}
+                                    <button type="button" class="fb-bpv-el" classList={{ 'is-q': isQuestion(b), 'is-cond': !!b.showIf, 'is-selected': sel() === b.id }}
                                       title={b.showIf ? `${label(b)} — ${ruleText(b.showIf, ed.doc)}` : label(b)} onClick={() => ed.select(b.id)}>
                                       <Icon name={KIND_ICON[b.kind]} size="sm" /><span>{label(b)}</span>
                                       <Show when={b.showIf} keyed>{(rule) => <small><Icon name="branch" size="sm" />{ruleText(rule, ed.doc)}</small>}</Show>
@@ -228,7 +228,7 @@ function BlueprintPanel() {
   const ed = useEditor();
   const target = createMemo(() => { const id = ed.selected(); return id ? locate(unwrap(ed.doc), id) : null; });
   return (
-    <aside class="fb-insp fb-bp-panel" aria-label="Condition">
+    <aside class="fb-insp fb-bpv-panel" aria-label="Condition">
       <Show when={target()} fallback={
         <div class="fb-insp-s">
           <div class="fb-insp-t">Blueprint</div>
